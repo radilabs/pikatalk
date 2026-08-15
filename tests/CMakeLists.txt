@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Test Sql Network)
+find_package(Qt6 REQUIRED COMPONENTS Test Sql Network Gui)
 
 add_executable(applicationpaths_test
     applicationpaths_test.cpp
@@ -48,6 +48,10 @@ add_executable(appcontroller_test
     ${CMAKE_SOURCE_DIR}/src/pikaclawclient.h
     ${CMAKE_SOURCE_DIR}/src/pikaclawsettings.cpp
     ${CMAKE_SOURCE_DIR}/src/pikaclawsettings.h
+    ${CMAKE_SOURCE_DIR}/src/messageformatting.cpp
+    ${CMAKE_SOURCE_DIR}/src/messageformatting.h
+    ${CMAKE_SOURCE_DIR}/src/workspaceactions.cpp
+    ${CMAKE_SOURCE_DIR}/src/workspaceactions.h
 )
 
 target_include_directories(appcontroller_test PRIVATE
@@ -58,6 +62,7 @@ target_include_directories(appcontroller_test PRIVATE
 target_link_libraries(appcontroller_test
     PRIVATE
     Qt6::Core
+    Qt6::Gui
     Qt6::Network
     Qt6::Sql
     Qt6::Test

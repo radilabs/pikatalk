@@ -1,4 +1,4 @@
-# PikaClaw chat API (Phase 2)
+# PikaClaw chat API (Phase 2–3)
 
 This document records the **observed** local chat API PikaTalk uses. It is not a general PicoClaw manual.
 
@@ -234,9 +234,135 @@ Server error shape:
 }
 ```
 
-## Out of scope (do not use in Phase 2)
+## Out of scope (do not use as Phase 2/3 chat transport)
 
 * `POST /api/gateway/start|stop|restart` and other launcher lifecycle routes
 * Direct calls to model provider HTTP APIs
-* Tool-call persistence/UX (`payload.kind = "tool_calls"`)
-* Treating PicoClaw session JSONL as PikaTalk history
+* Treating PicoClaw session JSONL as PikaTalk conversation history
+
+## Tool activity (Phase 3)
+
+Observed on PicoClaw 0.3.1 with real tool-using Pico Protocol turns.
+
+### Tool-call event on the WebSocket
+
+Tool calls arrive as:
+
+```text
+type = message.create
+payload.kind = "tool_calls"
+```
+
+Sanitized successful `list_dir` call (live probe `pikatalk-phase3-toolprobe`):
+
+```json
+{
+  "type": "message.create",
+  "payload": {
+    "kind": "tool_calls",
+    "model_name": "step-3.7-flash",
+    "content": "",
+    "message_id": "<uuid>",
+    "tool_calls": [
+      {
+        "id": "chatcmpl-tool-847e14db40650740",
+        "type": "function",
+        "function": {
+          "name": "list_dir",
+          "arguments": "{\n  \"path\": \".\"\n}"
+        },
+        "extra_content": {
+          "tool_feedback_explanation": "Continuing the current task.: ..."
+        }
+      }
+    ]
+  }
+}
+```
+
+Stable fields to persist from the wire:
+
+| Field | Meaning |
+| --- | --- |
+| `payload.message_id` | Pico message id for this tool-call event |
+| `payload.tool_calls[].id` | Tool call id (also used as `tool_call_id` in results) |
+| `payload.tool_calls[].type` | Usually `function` |
+| `payload.tool_calls[].function.name` | Tool name |
+| `payload.tool_calls[].function.arguments` | JSON string of inputs |
+| `payload.tool_calls[].extra_content` | Optional metadata (e.g. feedback explanation) |
+
+Ordering observed for a short tool turn:
+
+1. `typing.start` / `typing.stop`
+2. `message.create` `kind=thought` (ignore for tool UX)
+3. `message.create` `kind=tool_calls`
+4. optional further thought
+5. final non-thought `message.create` (user-visible assistant text)
+
+### Tool results are not on the Pico WebSocket
+
+Live probes never received a `message.create`/`message.update` carrying tool results. Results are written only into PicoClaw's own session JSONL under `~/.picoclaw/workspace/sessions/`.
+
+Successful result (session JSONL, sanitized):
+
+```json
+{
+  "role": "tool",
+  "tool_call_id": "chatcmpl-tool-847e14db40650740",
+  "content": "FILE: AGENT.md\nFILE: HEARTBEAT.md\n...",
+  "created_at": "..."
+}
+```
+
+Failed result (live probe `list_dir` on `/home/naorw`):
+
+```json
+{
+  "role": "tool",
+  "tool_call_id": "chatcmpl-tool-924a89f6ec4df5ef",
+  "content": "failed to read directory: path escapes workspace: /home/naorw",
+  "created_at": "..."
+}
+```
+
+There is no separate structured `status` / `error` field on these session rows. Failure is represented as ordinary `content` text that describes the error.
+
+Session files are located by scanning `*.meta.json` for:
+
+```text
+scope.values.chat = "direct:pico:<pikatalk-session-id>"
+```
+
+PikaTalk may read those result rows **only** to attach tool results to call ids already observed on the WebSocket. PicoClaw session logs remain not the source of truth for conversation history.
+
+### Deliberately ignored
+
+* Thought / reasoning events (`kind=thought`)
+* `extra_content.tool_feedback_explanation` may be stored in raw JSON but is not required for the compact UI
+* Treating session JSONL assistant/user rows as PikaTalk messages
+
+### Protocol limitations
+
+* Pico Protocol WebSocket exposes tool **calls**, not tool **results**, on 0.3.1
+* Tool result success vs failure is inferred from result text when needed; there is no boolean status on the wire
+* Multiple tools in one `tool_calls` array are possible in the schema; live probes exercised a single call at a time
+* Enabling PicoClaw `agents.defaults.tool_feedback` was not required for receiving `kind=tool_calls`
+
+### PikaTalk persistence and UI (Phase 3)
+
+* WebSocket `kind=tool_calls` rows are stored in SQLite `tool_activities` (schema v2), not as assistant messages.
+* Matching session JSONL `role=tool` content is attached by `tool_call_id` only (see `decisions/0004-tool-activity-persistence.md`).
+* Compact UI shows `Tool: <name> — ok|failed|running` with expandable input/result; `raw_call_json` is retained but not shown by default.
+* Thought events remain ignored.
+
+## Desktop workspace actions (Phase 3)
+
+These actions open the **PikaTalk active workspace** shown in the context bar (`currentWorkspace`). They do **not** change PicoClaw's execution root and do not introduce a second workspace concept.
+
+| Action | Default command |
+| --- | --- |
+| Open folder | `xdg-open <workspace>` |
+| Open terminal | `konsole --workdir <workspace>` (override: QSettings `desktop/terminalCommand`) |
+| Open editor | `kate <workspace>` (override: QSettings `desktop/editorCommand`) |
+
+Missing or non-directory workspaces fail with a visible non-destructive error (`workspaceActionError`).

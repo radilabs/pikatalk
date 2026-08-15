@@ -70,17 +70,18 @@ Schema decisions future work must respect are in `decisions/0002-local-sqlite-sc
 
 Table `schema_version(version INTEGER PRIMARY KEY)` stores a single integer.
 
-Current version: **1**.
+Current version: **2**.
 
 On open:
 
-* If no version row exists, create version 1 tables and insert version `1`.
-* If the stored version is not `1`, open fails. Do not guess.
+* If no version row exists, create version 2 tables and insert version `2`.
+* If the stored version is `1`, migrate to `2` by adding `tool_activities`.
+* If the stored version is not supported, open fails. Do not guess.
 * Later schema changes add version `n+1` and a migration from `n` to `n+1`. There is no ORM.
 
 `PRAGMA foreign_keys = ON` is required.
 
-### Tables (version 1)
+### Tables (version 2)
 
 **projects**
 
@@ -102,13 +103,22 @@ On open:
 * `role` CHECK (`user` or `assistant`)
 * `content`, `created_at`, `position`
 * `position` starts at 1 per chat and is the stable display order.
-* Tool activity is not stored in version 1. Later phases may add tables or columns keyed to `messages.id` without replacing this table.
+* Tool activity is **not** stored as message roles. See `tool_activities`.
 
 **drafts**
 
 * `chat_id` PRIMARY KEY (FK to `chats.id` ON DELETE CASCADE)
 * `content`, `updated_at`
 * One unfinished input per chat. Saving a draft does not create a message. Submit (Send) creates a user message and clears the draft.
+
+**tool_activities** (added in version 2)
+
+* `id`, `chat_id` (FK to `chats.id` ON DELETE CASCADE)
+* `message_id` (nullable FK to `messages.id` ON DELETE SET NULL) — optional link to the following assistant message for the turn
+* `tool_call_id`, `tool_name`, `arguments_json`, `raw_call_json`
+* `result_text`, `status` (`running` / `ok` / `error` / `unknown`), `error_text`
+* `created_at`, `position` — stable order within the chat
+* Deleting a chat cascades tool rows. See `decisions/0004-tool-activity-persistence.md`.
 
 ### Inheritance
 
@@ -124,7 +134,7 @@ Effective model:
 
 New chats are created with NULL overrides, so they inherit. Changing a project default updates inheriting chats. Clearing an override sets the column back to NULL.
 
-Deleting a project cascades to its chats, messages, and drafts.
+Deleting a project cascades to its chats, messages, drafts, and tool activities.
 
 ## Phase 2 gateway configuration
 
@@ -139,3 +149,12 @@ Keys under `[picoClaw]`:
 * `configPath` — PicoClaw `config.json` used for `model_list` discovery
 
 See `docs/pikaclaw-api.md` and `decisions/0003-pico-protocol-chat-transport.md`.
+
+## Phase 3 desktop actions
+
+Open-folder / open-terminal / open-editor use the effective active workspace from inheritance above. They do not write workspace paths into PicoClaw config. Optional launcher overrides live in the same QSettings org as other app prefs:
+
+* `desktop/terminalCommand`
+* `desktop/editorCommand`
+
+Copy-message and copy-code use the system clipboard via `AppController::copyText`. Code blocks are detected as Markdown fenced ``` segments in message content; they are not stored separately.

@@ -114,6 +114,31 @@ Kirigami.ApplicationWindow {
                         enabled: app.currentChatHasModelOverride
                         onClicked: app.clearCurrentChatModelOverride()
                     }
+                    Controls.Button {
+                        objectName: "openWorkspaceFileManager"
+                        text: i18n("Open folder")
+                        enabled: app.currentWorkspace.length > 0
+                        onClicked: app.openWorkspaceInFileManager()
+                    }
+                    Controls.Button {
+                        objectName: "openWorkspaceTerminal"
+                        text: i18n("Open terminal")
+                        enabled: app.currentWorkspace.length > 0
+                        onClicked: app.openWorkspaceInTerminal()
+                    }
+                    Controls.Button {
+                        objectName: "openWorkspaceEditor"
+                        text: i18n("Open editor")
+                        enabled: app.currentWorkspace.length > 0
+                        onClicked: app.openWorkspaceInEditor()
+                    }
+                }
+
+                Controls.Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    visible: app.workspaceActionError.length > 0
+                    text: i18n("Workspace action: %1", app.workspaceActionError)
                 }
             }
         }
@@ -382,31 +407,176 @@ Kirigami.ApplicationWindow {
                     Layout.fillHeight: true
                     clip: true
                     spacing: Kirigami.Units.largeSpacing
-                    model: app.messages
+                    model: {
+                        const messages = app.messages;
+                        const tools = app.toolActivities;
+                        const byMessage = {};
+                        const unassigned = [];
+                        for (let i = 0; i < tools.length; ++i) {
+                            const tool = tools[i];
+                            const messageId = tool.messageId || 0;
+                            if (messageId > 0) {
+                                if (!byMessage[messageId]) {
+                                    byMessage[messageId] = [];
+                                }
+                                byMessage[messageId].push(tool);
+                            } else {
+                                unassigned.push(tool);
+                            }
+                        }
+                        const items = [];
+                        for (let i = 0; i < messages.length; ++i) {
+                            const message = messages[i];
+                            if (message.role === "assistant") {
+                                const linked = byMessage[message.id] || [];
+                                for (let j = 0; j < linked.length; ++j) {
+                                    items.push({ kind: "tool", data: linked[j] });
+                                }
+                            }
+                            items.push({ kind: "message", data: message });
+                        }
+                        for (let i = 0; i < unassigned.length; ++i) {
+                            items.push({ kind: "tool", data: unassigned[i] });
+                        }
+                        return items;
+                    }
                     delegate: Item {
+                        id: row
                         required property var modelData
                         width: ListView.view.width
-                        height: bubble.height
+                        height: modelData.kind === "tool" ? toolFrame.height : bubble.height
 
                         Controls.Frame {
                             id: bubble
-                            objectName: modelData.role === "user" ? "userMessage" : "assistantMessage"
+                            objectName: modelData.data.role === "user" ? "userMessage" : "assistantMessage"
+                            visible: modelData.kind === "message"
                             width: parent.width * 0.8
-                            anchors.right: modelData.role === "user" ? parent.right : undefined
-                            anchors.left: modelData.role === "user" ? undefined : parent.left
+                            anchors.right: modelData.data.role === "user" ? parent.right : undefined
+                            anchors.left: modelData.data.role === "user" ? undefined : parent.left
                             Kirigami.Theme.inherit: false
-                            Kirigami.Theme.colorSet: modelData.role === "user" ? Kirigami.Theme.Selection : Kirigami.Theme.View
+                            Kirigami.Theme.colorSet: modelData.data.role === "user" ? Kirigami.Theme.Selection : Kirigami.Theme.View
 
                             background: Rectangle {
                                 color: Kirigami.Theme.backgroundColor
                                 radius: Kirigami.Units.cornerRadius
                             }
 
-                            Controls.Label {
+                            ColumnLayout {
                                 width: parent.width
-                                wrapMode: Text.Wrap
-                                color: Kirigami.Theme.textColor
-                                text: modelData.content
+                                spacing: Kirigami.Units.smallSpacing
+
+                                Repeater {
+                                    model: app.messageSegments(modelData.data.content || "")
+                                    delegate: ColumnLayout {
+                                        required property var modelData
+                                        Layout.fillWidth: true
+                                        spacing: Kirigami.Units.smallSpacing
+
+                                        Controls.Label {
+                                            Layout.fillWidth: true
+                                            wrapMode: Text.Wrap
+                                            color: Kirigami.Theme.textColor
+                                            visible: modelData.kind === "text" && (modelData.text || "").length > 0
+                                            text: modelData.text || ""
+                                        }
+
+                                        Controls.Frame {
+                                            Layout.fillWidth: true
+                                            visible: modelData.kind === "code"
+                                            objectName: "codeBlock"
+
+                                            ColumnLayout {
+                                                width: parent.width
+                                                spacing: Kirigami.Units.smallSpacing
+
+                                                Controls.Label {
+                                                    Layout.fillWidth: true
+                                                    wrapMode: Text.Wrap
+                                                    font.family: "monospace"
+                                                    color: Kirigami.Theme.textColor
+                                                    text: modelData.text || ""
+                                                }
+                                                Controls.Button {
+                                                    objectName: "copyCodeBlock"
+                                                    text: i18n("Copy code")
+                                                    onClicked: app.copyText(modelData.text || "")
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Controls.Button {
+                                    objectName: "copyMessage"
+                                    text: i18n("Copy")
+                                    onClicked: app.copyText(modelData.data.content || "")
+                                }
+                            }
+                        }
+
+                        Controls.Frame {
+                            id: toolFrame
+                            objectName: "toolActivity"
+                            visible: modelData.kind === "tool"
+                            width: parent.width * 0.8
+                            anchors.left: parent.left
+                            Kirigami.Theme.inherit: false
+                            Kirigami.Theme.colorSet: Kirigami.Theme.View
+
+                            background: Rectangle {
+                                color: Kirigami.Theme.backgroundColor
+                                radius: Kirigami.Units.cornerRadius
+                                opacity: 0.85
+                            }
+
+                            ColumnLayout {
+                                width: parent.width
+                                spacing: Kirigami.Units.smallSpacing
+
+                                Controls.Button {
+                                    objectName: "toolActivitySummary"
+                                    Layout.fillWidth: true
+                                    flat: true
+                                    text: {
+                                        const status = modelData.data.status || "running";
+                                        const statusLabel = status === "ok" ? i18n("ok")
+                                                          : status === "error" ? i18n("failed")
+                                                          : i18n("running");
+                                        return i18n("Tool: %1 — %2", modelData.data.toolName || i18n("unknown"), statusLabel);
+                                    }
+                                    onClicked: toolDetails.visible = !toolDetails.visible
+                                }
+
+                                ColumnLayout {
+                                    id: toolDetails
+                                    objectName: "toolActivityDetails"
+                                    Layout.fillWidth: true
+                                    visible: false
+                                    spacing: Kirigami.Units.smallSpacing
+
+                                    Controls.Label {
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.Wrap
+                                        visible: (modelData.data.argumentsJson || "").length > 0
+                                        text: i18n("Input: %1", modelData.data.argumentsJson || "")
+                                    }
+                                    Controls.Label {
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.Wrap
+                                        visible: (modelData.data.resultText || "").length > 0
+                                        text: modelData.data.status === "error"
+                                              ? i18n("Error: %1", modelData.data.errorText || modelData.data.resultText || "")
+                                              : i18n("Result: %1", modelData.data.resultText || "")
+                                    }
+                                    Controls.Label {
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.Wrap
+                                        visible: modelData.data.status === "error"
+                                                 && (modelData.data.errorText || "").length > 0
+                                                 && modelData.data.errorText !== modelData.data.resultText
+                                        text: i18n("Detail: %1", modelData.data.errorText || "")
+                                    }
+                                }
                             }
                         }
                     }

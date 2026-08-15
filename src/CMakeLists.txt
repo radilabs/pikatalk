@@ -18,6 +18,10 @@ target_sources(pikatalk
     pikaclawclient.h
     pikaclawsettings.cpp
     pikaclawsettings.h
+    messageformatting.cpp
+    messageformatting.h
+    workspaceactions.cpp
+    workspaceactions.h
 )
 
 ecm_target_qml_sources(pikatalk

@@ -61,6 +61,37 @@ public:
     bool saveDraft(qint64 chatId, const QString &content, QString *error = nullptr);
     bool readDraft(qint64 chatId, QString *content, QString *error = nullptr) const;
 
+    qint64 addToolActivity(qint64 chatId,
+                           qint64 messageId,
+                           const QString &toolCallId,
+                           const QString &toolName,
+                           const QString &argumentsJson,
+                           const QString &rawCallJson,
+                           const QString &resultText,
+                           const QString &status,
+                           const QString &errorText,
+                           qint64 position,
+                           QString *error = nullptr);
+    bool updateToolActivityResult(qint64 id,
+                                  const QString &resultText,
+                                  const QString &status,
+                                  const QString &errorText,
+                                  QString *error = nullptr);
+    bool updateToolActivityMessageId(qint64 id, qint64 messageId, QString *error = nullptr);
+    bool readToolActivity(qint64 id,
+                          qint64 *chatId,
+                          qint64 *messageId,
+                          QString *toolCallId,
+                          QString *toolName,
+                          QString *argumentsJson,
+                          QString *rawCallJson,
+                          QString *resultText,
+                          QString *status,
+                          QString *errorText,
+                          qint64 *position,
+                          QString *error = nullptr) const;
+    QList<qint64> listToolActivityIds(qint64 chatId, QString *error = nullptr) const;
+
 private:
     bool exec(const QString &sql, QString *error) const;
     qint64 nowMs() const;

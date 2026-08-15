@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -104,6 +105,89 @@ QString loadPicoClawDefaultModelName(const QString &configPath)
         .value(QStringLiteral("model_name"))
         .toString()
         .trimmed();
+}
+
+QString loadPicoClawDefaultWorkspace(const QString &configPath)
+{
+    if (configPath.isEmpty()) {
+        return QDir::homePath() + QStringLiteral("/.picoclaw/workspace");
+    }
+    QFile file(configPath);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return QDir::homePath() + QStringLiteral("/.picoclaw/workspace");
+    }
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
+    if (!document.isObject()) {
+        return QDir::homePath() + QStringLiteral("/.picoclaw/workspace");
+    }
+    const QString workspace = document.object()
+                                  .value(QStringLiteral("agents"))
+                                  .toObject()
+                                  .value(QStringLiteral("defaults"))
+                                  .toObject()
+                                  .value(QStringLiteral("workspace"))
+                                  .toString()
+                                  .trimmed();
+    if (workspace.isEmpty()) {
+        return QDir::homePath() + QStringLiteral("/.picoclaw/workspace");
+    }
+    return workspace;
+}
+
+QString picoClawSessionsDirectory(const QString &configPath)
+{
+    return QDir(loadPicoClawDefaultWorkspace(configPath)).filePath(QStringLiteral("sessions"));
+}
+
+QHash<QString, QString> loadPicoClawToolResults(const QString &sessionsDirectory, const QString &sessionId)
+{
+    QHash<QString, QString> results;
+    if (sessionsDirectory.isEmpty() || sessionId.isEmpty()) {
+        return results;
+    }
+    const QString needle = QStringLiteral("direct:pico:%1").arg(sessionId);
+    const QDir dir(sessionsDirectory);
+    const QFileInfoList metas = dir.entryInfoList({QStringLiteral("*.meta.json")}, QDir::Files);
+    QString jsonlPath;
+    for (const QFileInfo &metaInfo : metas) {
+        QFile metaFile(metaInfo.absoluteFilePath());
+        if (!metaFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            continue;
+        }
+        const QJsonObject meta = QJsonDocument::fromJson(metaFile.readAll()).object();
+        const QString chat = meta.value(QStringLiteral("scope"))
+                                .toObject()
+                                .value(QStringLiteral("values"))
+                                .toObject()
+                                .value(QStringLiteral("chat"))
+                                .toString();
+        if (chat != needle) {
+            continue;
+        }
+        jsonlPath = metaInfo.absoluteFilePath();
+        jsonlPath.chop(QStringLiteral(".meta.json").size());
+        jsonlPath += QStringLiteral(".jsonl");
+        break;
+    }
+    if (jsonlPath.isEmpty()) {
+        return results;
+    }
+    QFile jsonl(jsonlPath);
+    if (!jsonl.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return results;
+    }
+    while (!jsonl.atEnd()) {
+        const QJsonObject row = QJsonDocument::fromJson(jsonl.readLine()).object();
+        if (row.value(QStringLiteral("role")).toString() != QStringLiteral("tool")) {
+            continue;
+        }
+        const QString callId = row.value(QStringLiteral("tool_call_id")).toString();
+        if (callId.isEmpty()) {
+            continue;
+        }
+        results.insert(callId, row.value(QStringLiteral("content")).toString());
+    }
+    return results;
 }
 
 PicoClawConnectionSettings loadPicoClawConnectionSettings(const QString &pikaTalkConfigDirectory)

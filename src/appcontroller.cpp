@@ -1,8 +1,16 @@
 #include "appcontroller.h"
+#include "messageformatting.h"
 #include "pikaclawsettings.h"
+#include "workspaceactions.h"
 
+#include <QClipboard>
+#include <QCoreApplication>
 #include <QDebug>
+#include <QGuiApplication>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
+#include <QSettings>
 #include <QUrlQuery>
 #include <QUuid>
 
@@ -200,6 +208,71 @@ bool AppController::canRetryOrRegenerate() const
         && m_gateway.connectionState() == QStringLiteral("connected");
 }
 
+QVariantList AppController::toolActivities() const
+{
+    return m_toolActivities;
+}
+
+QString AppController::lastCopiedText() const
+{
+    return m_lastCopiedText;
+}
+
+QString AppController::workspaceActionError() const
+{
+    return m_workspaceActionError;
+}
+
+void AppController::copyText(const QString &text)
+{
+    m_lastCopiedText = text;
+    if (qobject_cast<QGuiApplication *>(QCoreApplication::instance())) {
+        if (QClipboard *clipboard = QGuiApplication::clipboard()) {
+            clipboard->setText(text);
+        }
+    }
+    Q_EMIT lastCopiedTextChanged();
+}
+
+QVariantList AppController::messageSegments(const QString &content) const
+{
+    return splitMessageSegments(content);
+}
+
+bool AppController::openWorkspaceInFileManager()
+{
+    const WorkspaceLaunchResult prepared = prepareOpenWorkspaceInFileManager(m_currentWorkspace);
+    QString error;
+    const bool ok = launchPreparedWorkspaceAction(prepared, &error);
+    m_workspaceActionError = ok ? QString() : (error.isEmpty() ? prepared.error : error);
+    Q_EMIT workspaceActionErrorChanged();
+    return ok;
+}
+
+bool AppController::openWorkspaceInTerminal()
+{
+    QSettings settings;
+    const QString terminal = settings.value(QStringLiteral("desktop/terminalCommand")).toString();
+    const WorkspaceLaunchResult prepared = prepareOpenWorkspaceInTerminal(m_currentWorkspace, terminal);
+    QString error;
+    const bool ok = launchPreparedWorkspaceAction(prepared, &error);
+    m_workspaceActionError = ok ? QString() : (error.isEmpty() ? prepared.error : error);
+    Q_EMIT workspaceActionErrorChanged();
+    return ok;
+}
+
+bool AppController::openWorkspaceInEditor()
+{
+    QSettings settings;
+    const QString editor = settings.value(QStringLiteral("desktop/editorCommand")).toString();
+    const WorkspaceLaunchResult prepared = prepareOpenWorkspaceInEditor(m_currentWorkspace, editor);
+    QString error;
+    const bool ok = launchPreparedWorkspaceAction(prepared, &error);
+    m_workspaceActionError = ok ? QString() : (error.isEmpty() ? prepared.error : error);
+    Q_EMIT workspaceActionErrorChanged();
+    return ok;
+}
+
 void AppController::reloadProjects()
 {
     m_projects.clear();
@@ -297,7 +370,63 @@ void AppController::reloadMessages()
         }
     }
     Q_EMIT messagesChanged();
+    reloadToolActivities();
     reloadWorkspace();
+}
+
+void AppController::reloadToolActivities()
+{
+    m_toolActivities.clear();
+    QString error;
+    QList<qint64> ids;
+    if (m_currentChatId > 0) {
+        ids = m_db.listToolActivityIds(m_currentChatId, &error);
+    }
+    qint64 maxPosition = 0;
+    for (qint64 id : ids) {
+        qint64 chatId = 0;
+        qint64 messageId = 0;
+        QString toolCallId;
+        QString toolName;
+        QString argumentsJson;
+        QString rawCallJson;
+        QString resultText;
+        QString status;
+        QString errorText;
+        qint64 position = 0;
+        if (!m_db.readToolActivity(id,
+                                   &chatId,
+                                   &messageId,
+                                   &toolCallId,
+                                   &toolName,
+                                   &argumentsJson,
+                                   &rawCallJson,
+                                   &resultText,
+                                   &status,
+                                   &errorText,
+                                   &position,
+                                   &error)) {
+            qWarning() << error;
+            continue;
+        }
+        QVariantMap row;
+        row.insert(QStringLiteral("id"), id);
+        row.insert(QStringLiteral("messageId"), messageId);
+        row.insert(QStringLiteral("toolCallId"), toolCallId);
+        row.insert(QStringLiteral("toolName"), toolName);
+        row.insert(QStringLiteral("argumentsJson"), argumentsJson);
+        row.insert(QStringLiteral("rawCallJson"), rawCallJson);
+        row.insert(QStringLiteral("resultText"), resultText);
+        row.insert(QStringLiteral("status"), status);
+        row.insert(QStringLiteral("errorText"), errorText);
+        row.insert(QStringLiteral("position"), QVariant::fromValue(position));
+        m_toolActivities.append(row);
+        if (position > maxPosition) {
+            maxPosition = position;
+        }
+    }
+    m_nextToolPosition = maxPosition + 1;
+    Q_EMIT toolActivitiesChanged();
 }
 
 void AppController::reloadWorkspace()
@@ -814,6 +943,7 @@ void AppController::beginGatewayTurn(const QString &userContent)
     m_streamingPicoMessageId.clear();
     m_requestError.clear();
     m_awaitingRetry = false;
+    m_pendingToolActivityIds.clear();
     m_isGenerating = true;
     Q_EMIT chatTurnChanged();
     if (sessionNeedsModelSwitch()) {
@@ -901,10 +1031,21 @@ bool AppController::retryOrRegenerate()
 
 void AppController::finishTurn()
 {
+    refreshPendingToolResults();
+    if (m_persistedAssistantId > 0) {
+        QString error;
+        for (qint64 toolId : m_pendingToolActivityIds) {
+            m_db.updateToolActivityMessageId(toolId, m_persistedAssistantId, &error);
+        }
+    }
+    m_pendingToolActivityIds.clear();
     m_isGenerating = false;
     m_modelSwitchPending = false;
     m_pendingUserContent.clear();
     Q_EMIT chatTurnChanged();
+    if (m_currentChatId == m_turnChatId) {
+        reloadToolActivities();
+    }
 }
 
 void AppController::persistStreamingAssistant()
@@ -918,9 +1059,116 @@ void AppController::persistStreamingAssistant()
     } else {
         m_persistedAssistantId = m_db.addMessage(m_turnChatId, QStringLiteral("assistant"), m_streamingAssistantText, &error);
         m_db.touchChat(m_turnChatId, &error);
+        for (qint64 toolId : m_pendingToolActivityIds) {
+            m_db.updateToolActivityMessageId(toolId, m_persistedAssistantId, &error);
+        }
     }
     if (m_currentChatId == m_turnChatId) {
         reloadMessages();
+    }
+}
+
+QString AppController::classifyToolResultStatus(const QString &resultText) const
+{
+    const QString lower = resultText.toLower();
+    if (resultText.isEmpty()) {
+        return QStringLiteral("running");
+    }
+    if (lower.contains(QStringLiteral("failed"))
+        || lower.contains(QStringLiteral("error"))
+        || lower.contains(QStringLiteral("blocked"))
+        || lower.contains(QStringLiteral("escapes workspace"))
+        || lower.contains(QStringLiteral("denied"))
+        || lower.contains(QStringLiteral("not found"))) {
+        return QStringLiteral("error");
+    }
+    return QStringLiteral("ok");
+}
+
+void AppController::persistToolCalls(const QJsonObject &payload)
+{
+    if (m_turnChatId <= 0) {
+        return;
+    }
+    const QJsonArray calls = payload.value(QStringLiteral("tool_calls")).toArray();
+    QString error;
+    for (const QJsonValue &value : calls) {
+        const QJsonObject call = value.toObject();
+        const QString toolCallId = call.value(QStringLiteral("id")).toString();
+        const QJsonObject function = call.value(QStringLiteral("function")).toObject();
+        const QString toolName = function.value(QStringLiteral("name")).toString();
+        const QString arguments = function.value(QStringLiteral("arguments")).toString();
+        if (toolCallId.isEmpty() || toolName.isEmpty()) {
+            continue;
+        }
+        const QString raw = QString::fromUtf8(QJsonDocument(call).toJson(QJsonDocument::Compact));
+        const qint64 id = m_db.addToolActivity(m_turnChatId,
+                                               m_persistedAssistantId,
+                                               toolCallId,
+                                               toolName,
+                                               arguments,
+                                               raw,
+                                               QStringLiteral(""),
+                                               QStringLiteral("running"),
+                                               QStringLiteral(""),
+                                               m_nextToolPosition++,
+                                               &error);
+        if (id > 0) {
+            m_pendingToolActivityIds.append(id);
+        } else {
+            qWarning() << error;
+        }
+    }
+    refreshPendingToolResults();
+    if (m_currentChatId == m_turnChatId) {
+        reloadToolActivities();
+    }
+}
+
+void AppController::refreshPendingToolResults()
+{
+    if (m_pendingToolActivityIds.isEmpty()) {
+        return;
+    }
+    const QString sessionId = picoSessionId(m_turnChatId > 0 ? m_turnChatId : m_currentChatId);
+    const QHash<QString, QString> results =
+        loadPicoClawToolResults(picoClawSessionsDirectory(m_picoConfigPath), sessionId);
+    if (results.isEmpty()) {
+        return;
+    }
+    QString error;
+    for (qint64 id : m_pendingToolActivityIds) {
+        qint64 chatId = 0;
+        qint64 messageId = 0;
+        QString toolCallId;
+        QString toolName;
+        QString argumentsJson;
+        QString rawCallJson;
+        QString resultText;
+        QString status;
+        QString errorText;
+        qint64 position = 0;
+        if (!m_db.readToolActivity(id,
+                                   &chatId,
+                                   &messageId,
+                                   &toolCallId,
+                                   &toolName,
+                                   &argumentsJson,
+                                   &rawCallJson,
+                                   &resultText,
+                                   &status,
+                                   &errorText,
+                                   &position,
+                                   &error)) {
+            continue;
+        }
+        if (!results.contains(toolCallId)) {
+            continue;
+        }
+        const QString nextResult = results.value(toolCallId);
+        const QString nextStatus = classifyToolResultStatus(nextResult);
+        const QString nextError = nextStatus == QStringLiteral("error") ? nextResult : QStringLiteral("");
+        m_db.updateToolActivityResult(id, nextResult, nextStatus, nextError, &error);
     }
 }
 
@@ -942,7 +1190,13 @@ void AppController::onGatewayMessage(const QJsonObject &object)
         return;
     }
     const QString kind = payload.value(QStringLiteral("kind")).toString();
-    if (kind == QStringLiteral("thought") || kind == QStringLiteral("tool_calls")) {
+    if (kind == QStringLiteral("thought")) {
+        return;
+    }
+    if (kind == QStringLiteral("tool_calls")) {
+        if (m_isGenerating || m_persistedAssistantId > 0) {
+            persistToolCalls(payload);
+        }
         return;
     }
     if (type == QStringLiteral("message.create") || type == QStringLiteral("message.update")) {

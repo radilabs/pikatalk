@@ -12,7 +12,33 @@
 
 namespace
 {
-constexpr int kSchemaVersion = 1;
+constexpr int kSchemaVersion = 2;
+
+bool createToolActivitiesTable(QSqlDatabase &db, QString *error)
+{
+    QSqlQuery query(db);
+    if (!query.exec(QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS tool_activities ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,"
+            " message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,"
+            " tool_call_id TEXT NOT NULL,"
+            " tool_name TEXT NOT NULL,"
+            " arguments_json TEXT NOT NULL DEFAULT '',"
+            " raw_call_json TEXT NOT NULL DEFAULT '',"
+            " result_text TEXT NOT NULL DEFAULT '',"
+            " status TEXT NOT NULL DEFAULT 'unknown',"
+            " error_text TEXT NOT NULL DEFAULT '',"
+            " created_at INTEGER NOT NULL,"
+            " position INTEGER NOT NULL"
+            ")"))) {
+        if (error != nullptr) {
+            *error = query.lastError().text();
+        }
+        return false;
+    }
+    return true;
+}
 }
 
 LocalDatabase::LocalDatabase()
@@ -160,13 +186,38 @@ bool LocalDatabase::open(const QString &filePath, QString *error)
                 " content TEXT NOT NULL DEFAULT '',"
                 " updated_at INTEGER NOT NULL"
                 ")"),
-            QStringLiteral("INSERT INTO schema_version(version) VALUES (1)"),
+            QStringLiteral(
+                "CREATE TABLE tool_activities ("
+                " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                " chat_id INTEGER NOT NULL REFERENCES chats(id) ON DELETE CASCADE,"
+                " message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL,"
+                " tool_call_id TEXT NOT NULL,"
+                " tool_name TEXT NOT NULL,"
+                " arguments_json TEXT NOT NULL DEFAULT '',"
+                " raw_call_json TEXT NOT NULL DEFAULT '',"
+                " result_text TEXT NOT NULL DEFAULT '',"
+                " status TEXT NOT NULL DEFAULT 'unknown',"
+                " error_text TEXT NOT NULL DEFAULT '',"
+                " created_at INTEGER NOT NULL,"
+                " position INTEGER NOT NULL"
+                ")"),
+            QStringLiteral("INSERT INTO schema_version(version) VALUES (2)"),
         };
         for (const QString &sql : statements) {
             if (!exec(sql, error)) {
                 close();
                 return false;
             }
+        }
+    } else if (currentVersion == 1) {
+        QSqlDatabase database = QSqlDatabase::database(m_connectionName);
+        if (!createToolActivitiesTable(database, error)) {
+            close();
+            return false;
+        }
+        if (!exec(QStringLiteral("UPDATE schema_version SET version = 2"), error)) {
+            close();
+            return false;
         }
     } else if (currentVersion != kSchemaVersion) {
         setError(error, QStringLiteral("Unsupported schema version: %1").arg(currentVersion));
@@ -740,4 +791,156 @@ bool LocalDatabase::readDraft(qint64 chatId, QString *content, QString *error) c
         *content = query.value(0).toString();
     }
     return true;
+}
+
+qint64 LocalDatabase::addToolActivity(qint64 chatId,
+                                      qint64 messageId,
+                                      const QString &toolCallId,
+                                      const QString &toolName,
+                                      const QString &argumentsJson,
+                                      const QString &rawCallJson,
+                                      const QString &resultText,
+                                      const QString &status,
+                                      const QString &errorText,
+                                      qint64 position,
+                                      QString *error)
+{
+    QSqlQuery query(QSqlDatabase::database(m_connectionName));
+    query.prepare(QStringLiteral(
+        "INSERT INTO tool_activities("
+        " chat_id, message_id, tool_call_id, tool_name, arguments_json, raw_call_json,"
+        " result_text, status, error_text, created_at, position)"
+        " VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"));
+    query.addBindValue(chatId);
+    if (messageId > 0) {
+        query.addBindValue(messageId);
+    } else {
+        query.addBindValue(QVariant());
+    }
+    query.addBindValue(toolCallId);
+    query.addBindValue(toolName);
+    query.addBindValue(argumentsJson);
+    query.addBindValue(rawCallJson);
+    query.addBindValue(resultText.isNull() ? QStringLiteral("") : resultText);
+    query.addBindValue(status.isEmpty() ? QStringLiteral("unknown") : status);
+    query.addBindValue(errorText.isNull() ? QStringLiteral("") : errorText);
+    query.addBindValue(nowMs());
+    query.addBindValue(position);
+    if (!query.exec()) {
+        setError(error, query.lastError().text());
+        return 0;
+    }
+    return query.lastInsertId().toLongLong();
+}
+
+bool LocalDatabase::updateToolActivityResult(qint64 id,
+                                             const QString &resultText,
+                                             const QString &status,
+                                             const QString &errorText,
+                                             QString *error)
+{
+    QSqlQuery query(QSqlDatabase::database(m_connectionName));
+    query.prepare(QStringLiteral(
+        "UPDATE tool_activities SET result_text = ?, status = ?, error_text = ? WHERE id = ?"));
+    query.addBindValue(resultText);
+    query.addBindValue(status);
+    query.addBindValue(errorText);
+    query.addBindValue(id);
+    if (!query.exec()) {
+        setError(error, query.lastError().text());
+        return false;
+    }
+    return query.numRowsAffected() > 0;
+}
+
+bool LocalDatabase::updateToolActivityMessageId(qint64 id, qint64 messageId, QString *error)
+{
+    QSqlQuery query(QSqlDatabase::database(m_connectionName));
+    query.prepare(QStringLiteral("UPDATE tool_activities SET message_id = ? WHERE id = ?"));
+    if (messageId > 0) {
+        query.addBindValue(messageId);
+    } else {
+        query.addBindValue(QVariant());
+    }
+    query.addBindValue(id);
+    if (!query.exec()) {
+        setError(error, query.lastError().text());
+        return false;
+    }
+    return query.numRowsAffected() > 0;
+}
+
+bool LocalDatabase::readToolActivity(qint64 id,
+                                     qint64 *chatId,
+                                     qint64 *messageId,
+                                     QString *toolCallId,
+                                     QString *toolName,
+                                     QString *argumentsJson,
+                                     QString *rawCallJson,
+                                     QString *resultText,
+                                     QString *status,
+                                     QString *errorText,
+                                     qint64 *position,
+                                     QString *error) const
+{
+    QSqlQuery query(QSqlDatabase::database(m_connectionName));
+    query.prepare(QStringLiteral(
+        "SELECT chat_id, message_id, tool_call_id, tool_name, arguments_json, raw_call_json,"
+        " result_text, status, error_text, position FROM tool_activities WHERE id = ?"));
+    query.addBindValue(id);
+    if (!query.exec()) {
+        setError(error, query.lastError().text());
+        return false;
+    }
+    if (!query.next()) {
+        setError(error, QStringLiteral("Tool activity not found"));
+        return false;
+    }
+    if (chatId != nullptr) {
+        *chatId = query.value(0).toLongLong();
+    }
+    if (messageId != nullptr) {
+        *messageId = query.value(1).isNull() ? 0 : query.value(1).toLongLong();
+    }
+    if (toolCallId != nullptr) {
+        *toolCallId = query.value(2).toString();
+    }
+    if (toolName != nullptr) {
+        *toolName = query.value(3).toString();
+    }
+    if (argumentsJson != nullptr) {
+        *argumentsJson = query.value(4).toString();
+    }
+    if (rawCallJson != nullptr) {
+        *rawCallJson = query.value(5).toString();
+    }
+    if (resultText != nullptr) {
+        *resultText = query.value(6).toString();
+    }
+    if (status != nullptr) {
+        *status = query.value(7).toString();
+    }
+    if (errorText != nullptr) {
+        *errorText = query.value(8).toString();
+    }
+    if (position != nullptr) {
+        *position = query.value(9).toLongLong();
+    }
+    return true;
+}
+
+QList<qint64> LocalDatabase::listToolActivityIds(qint64 chatId, QString *error) const
+{
+    QList<qint64> ids;
+    QSqlQuery query(QSqlDatabase::database(m_connectionName));
+    query.prepare(QStringLiteral("SELECT id FROM tool_activities WHERE chat_id = ? ORDER BY position, id"));
+    query.addBindValue(chatId);
+    if (!query.exec()) {
+        setError(error, query.lastError().text());
+        return ids;
+    }
+    while (query.next()) {
+        ids.append(query.value(0).toLongLong());
+    }
+    return ids;
 }

@@ -1,9 +1,14 @@
 #include "appcontroller.h"
+#include "database.h"
 #include "fake_pico_server.h"
+#include "messageformatting.h"
 #include "pikaclawsettings.h"
+#include "workspaceactions.h"
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QTemporaryDir>
 #include <QUrl>
@@ -67,7 +72,14 @@ private Q_SLOTS:
     void stopGenerationEndsTurnAndPreservesHistory();
     void retryRegeneratesLatestAssistant();
     void gatewayErrorPreservesDraftAndHistory();
+    void persistsToolCallsAndResultsFromGateway();
+    void toolActivityExposesCompactSuccessAndFailureFields();
+    void copyTextPutsExactMessageOnClipboardBufferWithoutMutatingHistory();
+    void messageSegmentsSplitFencedCodeBlocks();
+    void workspaceLaunchersUseActiveWorkspacePath();
+    void openWorkspaceActionsLaunchAgainstRealDirectory();
     void liveGatewaySendIfEnabled();
+    void liveGatewayToolActivityIfEnabled();
 };
 
 void AppControllerTest::createRenameSwitchDeleteAndReopen()
@@ -878,6 +890,277 @@ void AppControllerTest::gatewayErrorPreservesDraftAndHistory()
     QCOMPARE(controller.currentDraft(), QString());
 }
 
+void AppControllerTest::persistsToolCallsAndResultsFromGateway()
+{
+    FakePicoServer server;
+    server.setRequiredToken(QStringLiteral("test-token"));
+    QVERIFY(server.listen());
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+
+    const QString sessionsDir = QDir(tmp.path()).filePath(QStringLiteral("sessions"));
+    QVERIFY(QDir().mkpath(sessionsDir));
+    const QString picoConfig = tmp.filePath(QStringLiteral("config.json"));
+    QFile pico(picoConfig);
+    QVERIFY(pico.open(QIODevice::WriteOnly | QIODevice::Text));
+    pico.write(QStringLiteral("{\"agents\":{\"defaults\":{\"model_name\":\"step-3.7-flash\",\"workspace\":\"%1\"}},\"model_list\":[{\"model_name\":\"step-3.7-flash\"}]}")
+                   .arg(tmp.path())
+                   .toUtf8());
+    pico.close();
+    QFile conf(QDir(tmp.path()).filePath(QStringLiteral("pikatalk.conf")));
+    QVERIFY(conf.open(QIODevice::WriteOnly | QIODevice::Text));
+    conf.write(QStringLiteral("[picoClaw]\nendpoint=%1\ntoken=test-token\nconfigPath=%2\n")
+                   .arg(server.wsUrl().toString(), picoConfig)
+                   .toUtf8());
+    conf.close();
+
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    QVERIFY(controller.createProject(QStringLiteral("Alpha")));
+    QVERIFY(controller.setCurrentProjectModel(QStringLiteral("step-3.7-flash")));
+    QVERIFY(controller.createChat(QStringLiteral("Chat")));
+    const QString sessionId = QStringLiteral("pikatalk-chat-%1").arg(controller.currentChatId());
+    QFile meta(QDir(sessionsDir).filePath(QStringLiteral("sk_v1_test.meta.json")));
+    QVERIFY(meta.open(QIODevice::WriteOnly | QIODevice::Text));
+    meta.write(QStringLiteral("{\"scope\":{\"values\":{\"chat\":\"direct:pico:%1\"}}}").arg(sessionId).toUtf8());
+    meta.close();
+    QFile jsonl(QDir(sessionsDir).filePath(QStringLiteral("sk_v1_test.jsonl")));
+    QVERIFY(jsonl.open(QIODevice::WriteOnly | QIODevice::Text));
+    jsonl.write(
+        QByteArray("{\"role\":\"tool\",\"tool_call_id\":\"chatcmpl-tool-1\",\"content\":\"FILE: AGENT.md\"}\n"));
+    jsonl.close();
+
+    controller.loadGatewaySettings(tmp.path());
+    controller.setGatewayAutoReconnect(false);
+    controller.connectToGateway();
+    QTRY_COMPARE(controller.gatewayState(), QStringLiteral("connected"));
+    QVERIFY(controller.sendChatMessage(QStringLiteral("list files")));
+    server.sendJson(QJsonObject{
+        {QStringLiteral("type"), QStringLiteral("message.create")},
+        {QStringLiteral("payload"),
+         QJsonObject{{QStringLiteral("kind"), QStringLiteral("tool_calls")},
+                     {QStringLiteral("message_id"), QStringLiteral("tc1")},
+                     {QStringLiteral("tool_calls"),
+                      QJsonArray{QJsonObject{
+                          {QStringLiteral("id"), QStringLiteral("chatcmpl-tool-1")},
+                          {QStringLiteral("type"), QStringLiteral("function")},
+                          {QStringLiteral("function"),
+                           QJsonObject{{QStringLiteral("name"), QStringLiteral("list_dir")},
+                                       {QStringLiteral("arguments"), QStringLiteral("{\"path\":\".\"}")}}}}}}}}});
+    QTRY_COMPARE(controller.toolActivities().size(), 1);
+    QCOMPARE(controller.toolActivities().at(0).toMap().value(QStringLiteral("toolName")).toString(),
+             QStringLiteral("list_dir"));
+    QTRY_COMPARE(controller.toolActivities().at(0).toMap().value(QStringLiteral("status")).toString(),
+                 QStringLiteral("ok"));
+    QCOMPARE(controller.toolActivities().at(0).toMap().value(QStringLiteral("resultText")).toString(),
+             QStringLiteral("FILE: AGENT.md"));
+    server.sendJson(picoAssistant(QStringLiteral("done"), QStringLiteral("a1")));
+    QTRY_COMPARE(controller.messages().size(), 2);
+    QCOMPARE(controller.toolActivities().size(), 1);
+    QCOMPARE(controller.toolActivities().at(0).toMap().value(QStringLiteral("messageId")).toLongLong() > 0, true);
+
+    const qint64 chatId = controller.currentChatId();
+    AppController reopened;
+    QVERIFY2(reopened.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    reopened.selectChat(chatId);
+    QCOMPARE(reopened.toolActivities().size(), 1);
+    QCOMPARE(reopened.toolActivities().at(0).toMap().value(QStringLiteral("toolName")).toString(),
+             QStringLiteral("list_dir"));
+    QCOMPARE(reopened.toolActivities().at(0).toMap().value(QStringLiteral("resultText")).toString(),
+             QStringLiteral("FILE: AGENT.md"));
+}
+
+void AppControllerTest::toolActivityExposesCompactSuccessAndFailureFields()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    const QString path = LocalDatabase::databaseFilePath(tmp.path());
+    QString error;
+    qint64 chatId = 0;
+    qint64 assistantId = 0;
+    {
+        AppController controller;
+        QVERIFY2(controller.openStore(path, &error), qUtf8Printable(error));
+        QVERIFY(controller.createProject(QStringLiteral("UI")));
+        QVERIFY(controller.createChat(QStringLiteral("Tools")));
+        chatId = controller.currentChatId();
+        LocalDatabase db;
+        QVERIFY2(db.open(path, &error), qUtf8Printable(error));
+        assistantId = db.addMessage(chatId, QStringLiteral("assistant"), QStringLiteral("done"), &error);
+        QVERIFY(assistantId > 0);
+        QVERIFY(db.addToolActivity(chatId,
+                                   assistantId,
+                                   QStringLiteral("call-ok"),
+                                   QStringLiteral("list_dir"),
+                                   QStringLiteral("{\"path\":\".\"}"),
+                                   QStringLiteral("{\"id\":\"call-ok\",\"raw\":true}"),
+                                   QStringLiteral("FILE: AGENT.md"),
+                                   QStringLiteral("ok"),
+                                   QString(),
+                                   1,
+                                   &error)
+                > 0);
+        QVERIFY(db.addToolActivity(chatId,
+                                   assistantId,
+                                   QStringLiteral("call-err"),
+                                   QStringLiteral("list_dir"),
+                                   QStringLiteral("{\"path\":\"/home\"}"),
+                                   QStringLiteral("{\"id\":\"call-err\",\"raw\":true}"),
+                                   QStringLiteral("failed to read directory: path escapes workspace"),
+                                   QStringLiteral("error"),
+                                   QStringLiteral("path escapes workspace"),
+                                   2,
+                                   &error)
+                > 0);
+        db.close();
+    }
+
+    AppController reopened;
+    QVERIFY2(reopened.openStore(path, &error), qUtf8Printable(error));
+    reopened.selectChat(chatId);
+    QCOMPARE(reopened.toolActivities().size(), 2);
+    const QVariantMap ok = reopened.toolActivities().at(0).toMap();
+    QCOMPARE(ok.value(QStringLiteral("toolName")).toString(), QStringLiteral("list_dir"));
+    QCOMPARE(ok.value(QStringLiteral("status")).toString(), QStringLiteral("ok"));
+    QCOMPARE(ok.value(QStringLiteral("argumentsJson")).toString(), QStringLiteral("{\"path\":\".\"}"));
+    QCOMPARE(ok.value(QStringLiteral("resultText")).toString(), QStringLiteral("FILE: AGENT.md"));
+    QVERIFY(ok.contains(QStringLiteral("rawCallJson")));
+    const QVariantMap failed = reopened.toolActivities().at(1).toMap();
+    QCOMPARE(failed.value(QStringLiteral("status")).toString(), QStringLiteral("error"));
+    QVERIFY(failed.value(QStringLiteral("resultText")).toString().contains(QStringLiteral("escapes workspace")));
+    QCOMPARE(failed.value(QStringLiteral("errorText")).toString(), QStringLiteral("path escapes workspace"));
+    QCOMPARE(failed.value(QStringLiteral("messageId")).toLongLong(), assistantId);
+}
+
+void AppControllerTest::copyTextPutsExactMessageOnClipboardBufferWithoutMutatingHistory()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    QVERIFY(controller.createProject(QStringLiteral("Copy")));
+    QVERIFY(controller.createChat(QStringLiteral("Chat")));
+    QVERIFY(controller.addUserMessage(QStringLiteral("user exact text")));
+    QVERIFY(controller.addAssistantMessage(QStringLiteral("assistant exact text")));
+    QCOMPARE(controller.messages().size(), 2);
+
+    controller.copyText(QStringLiteral("user exact text"));
+    QCOMPARE(controller.lastCopiedText(), QStringLiteral("user exact text"));
+    controller.copyText(QStringLiteral("assistant exact text"));
+    QCOMPARE(controller.lastCopiedText(), QStringLiteral("assistant exact text"));
+    QCOMPARE(controller.messages().size(), 2);
+    QCOMPARE(controller.messages().at(0).toMap().value(QStringLiteral("content")).toString(),
+             QStringLiteral("user exact text"));
+    QCOMPARE(controller.messages().at(1).toMap().value(QStringLiteral("content")).toString(),
+             QStringLiteral("assistant exact text"));
+}
+
+void AppControllerTest::messageSegmentsSplitFencedCodeBlocks()
+{
+    const QVariantList single = splitMessageSegments(
+        QStringLiteral("before\n```cpp\nint x = 1;\n```\nafter"));
+    QCOMPARE(single.size(), 3);
+    QCOMPARE(single.at(0).toMap().value(QStringLiteral("kind")).toString(), QStringLiteral("text"));
+    QCOMPARE(single.at(0).toMap().value(QStringLiteral("text")).toString(), QStringLiteral("before\n"));
+    QCOMPARE(single.at(1).toMap().value(QStringLiteral("kind")).toString(), QStringLiteral("code"));
+    QCOMPARE(single.at(1).toMap().value(QStringLiteral("text")).toString(), QStringLiteral("int x = 1;\n"));
+    QCOMPARE(single.at(2).toMap().value(QStringLiteral("text")).toString(), QStringLiteral("\nafter"));
+
+    const QVariantList multi = splitMessageSegments(
+        QStringLiteral("```\none\n```\nmid\n```\ntwo\n```"));
+    QCOMPARE(multi.size(), 3);
+    QCOMPARE(multi.at(0).toMap().value(QStringLiteral("text")).toString(), QStringLiteral("one\n"));
+    QCOMPARE(multi.at(1).toMap().value(QStringLiteral("kind")).toString(), QStringLiteral("text"));
+    QCOMPARE(multi.at(2).toMap().value(QStringLiteral("text")).toString(), QStringLiteral("two\n"));
+
+    AppController controller;
+    const QVariantList viaController = controller.messageSegments(QStringLiteral("plain only"));
+    QCOMPARE(viaController.size(), 1);
+    QCOMPARE(viaController.at(0).toMap().value(QStringLiteral("kind")).toString(), QStringLiteral("text"));
+    QCOMPARE(viaController.at(0).toMap().value(QStringLiteral("text")).toString(), QStringLiteral("plain only"));
+}
+
+void AppControllerTest::workspaceLaunchersUseActiveWorkspacePath()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    const QString projectDir = QDir(tmp.path()).filePath(QStringLiteral("project-ws"));
+    const QString overrideDir = QDir(tmp.path()).filePath(QStringLiteral("override-ws"));
+    QVERIFY(QDir().mkpath(projectDir));
+    QVERIFY(QDir().mkpath(overrideDir));
+
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    QVERIFY(controller.createProject(QStringLiteral("WS")));
+    QVERIFY(controller.setCurrentProjectWorkspace(projectDir));
+    QVERIFY(controller.createChat(QStringLiteral("Chat")));
+    QCOMPARE(controller.currentWorkspace(), QFileInfo(projectDir).absoluteFilePath());
+
+    WorkspaceLaunchResult files = prepareOpenWorkspaceInFileManager(controller.currentWorkspace());
+    QVERIFY(files.ok);
+    QCOMPARE(files.workingDirectory, QFileInfo(projectDir).absoluteFilePath());
+    QCOMPARE(files.command, QStringLiteral("xdg-open"));
+
+    WorkspaceLaunchResult term = prepareOpenWorkspaceInTerminal(controller.currentWorkspace());
+    QVERIFY(term.ok);
+    QCOMPARE(term.workingDirectory, QFileInfo(projectDir).absoluteFilePath());
+    QVERIFY(term.arguments.contains(term.workingDirectory));
+
+    WorkspaceLaunchResult editor = prepareOpenWorkspaceInEditor(controller.currentWorkspace());
+    QVERIFY(editor.ok);
+    QCOMPARE(editor.arguments.at(0), QFileInfo(projectDir).absoluteFilePath());
+
+    QVERIFY(controller.setCurrentChatWorkspaceOverride(overrideDir));
+    QCOMPARE(controller.currentWorkspace(), QFileInfo(overrideDir).absoluteFilePath());
+    files = prepareOpenWorkspaceInFileManager(controller.currentWorkspace());
+    QCOMPARE(files.workingDirectory, QFileInfo(overrideDir).absoluteFilePath());
+
+    WorkspaceLaunchResult missing = prepareOpenWorkspaceInFileManager(QStringLiteral("/no/such/pikatalk-ws"));
+    QVERIFY(!missing.ok);
+    QVERIFY(missing.error.contains(QStringLiteral("usable local directory")));
+    missing = prepareOpenWorkspaceInTerminal(QString());
+    QVERIFY(!missing.ok);
+    QCOMPARE(missing.error, QStringLiteral("No active workspace is set"));
+}
+
+void AppControllerTest::openWorkspaceActionsLaunchAgainstRealDirectory()
+{
+    if (!qEnvironmentVariableIsSet("PIKATALK_LIVE_DESKTOP")) {
+        QSKIP("Set PIKATALK_LIVE_DESKTOP=1 to launch real file manager/terminal/editor");
+    }
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    const QString projectDir = QDir(tmp.path()).filePath(QStringLiteral("real-project"));
+    QVERIFY(QDir().mkpath(projectDir));
+    QFile marker(QDir(projectDir).filePath(QStringLiteral("MARKER.txt")));
+    QVERIFY(marker.open(QIODevice::WriteOnly | QIODevice::Text));
+    marker.write("pikatalk-phase3\n");
+    marker.close();
+
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    QVERIFY(controller.createProject(QStringLiteral("RealWS")));
+    QVERIFY(controller.setCurrentProjectWorkspace(projectDir));
+    QVERIFY(controller.createChat(QStringLiteral("Chat")));
+    QCOMPARE(controller.currentWorkspace(), QFileInfo(projectDir).absoluteFilePath());
+    QVERIFY2(controller.openWorkspaceInFileManager(), qUtf8Printable(controller.workspaceActionError()));
+    QVERIFY2(controller.openWorkspaceInTerminal(), qUtf8Printable(controller.workspaceActionError()));
+    QVERIFY2(controller.openWorkspaceInEditor(), qUtf8Printable(controller.workspaceActionError()));
+    QCOMPARE(controller.workspaceActionError(), QString());
+
+    const QString overrideDir = QDir(tmp.path()).filePath(QStringLiteral("override-project"));
+    QVERIFY(QDir().mkpath(overrideDir));
+    QVERIFY(controller.setCurrentChatWorkspaceOverride(overrideDir));
+    QCOMPARE(controller.currentWorkspace(), QFileInfo(overrideDir).absoluteFilePath());
+    QVERIFY2(controller.openWorkspaceInFileManager(), qUtf8Printable(controller.workspaceActionError()));
+    QVERIFY2(controller.openWorkspaceInTerminal(), qUtf8Printable(controller.workspaceActionError()));
+    QVERIFY2(controller.openWorkspaceInEditor(), qUtf8Printable(controller.workspaceActionError()));
+}
+
 void AppControllerTest::liveGatewaySendIfEnabled()
 {
     if (!qEnvironmentVariableIsSet("PIKATALK_LIVE_GATEWAY")) {
@@ -904,6 +1187,41 @@ void AppControllerTest::liveGatewaySendIfEnabled()
     QCOMPARE(controller.messages().at(0).toMap().value(QStringLiteral("role")).toString(), QStringLiteral("user"));
     QCOMPARE(controller.messages().at(1).toMap().value(QStringLiteral("role")).toString(), QStringLiteral("assistant"));
     QVERIFY(controller.messages().at(1).toMap().value(QStringLiteral("content")).toString().contains(QStringLiteral("LIVEOK")));
+}
+
+void AppControllerTest::liveGatewayToolActivityIfEnabled()
+{
+    if (!qEnvironmentVariableIsSet("PIKATALK_LIVE_GATEWAY")) {
+        QSKIP("Set PIKATALK_LIVE_GATEWAY=1 to run a real PicoClaw tool-activity send");
+    }
+    const PicoClawConnectionSettings settings = loadPicoClawConnectionSettings(QDir::tempPath());
+    QVERIFY2(!settings.token.isEmpty(), "Pico channel token is required for live gateway test");
+
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    QVERIFY(controller.createProject(QStringLiteral("LiveTools")));
+    QVERIFY(controller.setCurrentProjectModel(QStringLiteral("step-3.7-flash")));
+    QVERIFY(controller.createChat(QStringLiteral("Tool chat")));
+    controller.loadGatewaySettings(QDir::tempPath());
+    controller.setGatewayAutoReconnect(false);
+    controller.connectToGateway();
+    QTRY_COMPARE_WITH_TIMEOUT(controller.gatewayState(), QStringLiteral("connected"), 10000);
+    QVERIFY(controller.sendChatMessage(
+        QStringLiteral("List the files in the current working directory using a filesystem tool. "
+                       "Then reply with exactly the word TOOLOK and nothing else.")));
+    QTRY_VERIFY_WITH_TIMEOUT(controller.toolActivities().size() >= 1, 90000);
+    QCOMPARE(controller.toolActivities().at(0).toMap().value(QStringLiteral("toolName")).toString().isEmpty(), false);
+    QTRY_VERIFY_WITH_TIMEOUT(
+        controller.toolActivities().at(0).toMap().value(QStringLiteral("status")).toString() == QStringLiteral("ok")
+            || controller.toolActivities().at(0).toMap().value(QStringLiteral("status")).toString()
+                == QStringLiteral("error"),
+        90000);
+    QVERIFY(!controller.toolActivities().at(0).toMap().value(QStringLiteral("resultText")).toString().isEmpty());
+    QTRY_VERIFY_WITH_TIMEOUT(controller.messages().size() == 2, 90000);
+    QVERIFY(controller.messages().at(1).toMap().value(QStringLiteral("content")).toString().contains(QStringLiteral("TOOLOK")));
 }
 
 QTEST_GUILESS_MAIN(AppControllerTest)

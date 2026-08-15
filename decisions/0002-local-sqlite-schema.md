@@ -13,11 +13,11 @@ Phase 1 requires persistent projects, chats, messages, and drafts. Phase 0 used 
 * Store Phase 1 data in `$XDG_DATA_HOME/Radilabs/PikaTalk/pikatalk.sqlite`.
 * Do not reuse or migrate `phase0.sqlite`. It remains a leftover proof file and may be ignored.
 * Track schema with table `schema_version(version INTEGER PRIMARY KEY)`.
-* Current version is `1`.
+* Current version is `1` for the initial Phase 1 tables. Phase 3 adds version `2` with `tool_activities` (ADR 0004).
 * On open, if no version row exists, create version 1 tables. If the stored version is not supported, fail openly rather than guessing.
 * Future schema changes add a new integer version and a migration from `n` to `n+1`. Do not introduce an ORM.
 * `chats.workspace_override` and `chats.model_override` are NULL when the chat inherits the project default, and non-NULL when overridden.
-* Deleting a project cascades to its chats, messages, and drafts.
+* Deleting a project cascades to its chats, messages, drafts, and (from schema version 2) tool activities.
 * Message `role` is `user` or `assistant`. Tool activity is not stored in version 1. Later phases may add tables or columns keyed to `messages.id` without replacing this table.
 
 ## Consequences

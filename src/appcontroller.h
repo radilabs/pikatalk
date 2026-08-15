@@ -39,6 +39,9 @@ class AppController : public QObject
     Q_PROPERTY(QString streamingAssistantText READ streamingAssistantText NOTIFY chatTurnChanged)
     Q_PROPERTY(QString requestError READ requestError NOTIFY chatTurnChanged)
     Q_PROPERTY(bool canRetryOrRegenerate READ canRetryOrRegenerate NOTIFY chatTurnChanged)
+    Q_PROPERTY(QVariantList toolActivities READ toolActivities NOTIFY toolActivitiesChanged)
+    Q_PROPERTY(QString lastCopiedText READ lastCopiedText NOTIFY lastCopiedTextChanged)
+    Q_PROPERTY(QString workspaceActionError READ workspaceActionError NOTIFY workspaceActionErrorChanged)
 
 public:
     explicit AppController(QObject *parent = nullptr);
@@ -73,6 +76,9 @@ public:
     QString streamingAssistantText() const;
     QString requestError() const;
     bool canRetryOrRegenerate() const;
+    QVariantList toolActivities() const;
+    QString lastCopiedText() const;
+    QString workspaceActionError() const;
 
     Q_INVOKABLE bool createProject(const QString &name);
     Q_INVOKABLE bool renameCurrentProject(const QString &name);
@@ -106,6 +112,11 @@ public:
     Q_INVOKABLE bool sendChatMessage(const QString &content);
     Q_INVOKABLE bool stopGeneration();
     Q_INVOKABLE bool retryOrRegenerate();
+    Q_INVOKABLE void copyText(const QString &text);
+    Q_INVOKABLE QVariantList messageSegments(const QString &content) const;
+    Q_INVOKABLE bool openWorkspaceInFileManager();
+    Q_INVOKABLE bool openWorkspaceInTerminal();
+    Q_INVOKABLE bool openWorkspaceInEditor();
 
 Q_SIGNALS:
     void projectsChanged();
@@ -120,6 +131,9 @@ Q_SIGNALS:
     void gatewayStateChanged();
     void availableModelsChanged();
     void chatTurnChanged();
+    void toolActivitiesChanged();
+    void lastCopiedTextChanged();
+    void workspaceActionErrorChanged();
 
 private:
     void reloadProjects();
@@ -127,12 +141,16 @@ private:
     void reloadMessages();
     void reloadWorkspace();
     void reloadDraft();
+    void reloadToolActivities();
     void refreshModelAvailability();
     bool addMessage(const QString &role, const QString &content);
     void clearPendingDeletion();
     void onGatewayMessage(const QJsonObject &object);
     void finishTurn();
     void persistStreamingAssistant();
+    void persistToolCalls(const QJsonObject &payload);
+    void refreshPendingToolResults();
+    QString classifyToolResultStatus(const QString &resultText) const;
     QString picoSessionId(qint64 chatId) const;
     QUrl sessionAwareEndpoint() const;
     void syncGatewaySession();
@@ -145,6 +163,7 @@ private:
     QVariantList m_projects;
     QVariantList m_chats;
     QVariantList m_messages;
+    QVariantList m_toolActivities;
     qint64 m_currentProjectId = 0;
     qint64 m_currentChatId = 0;
     QString m_currentWorkspace;
@@ -173,4 +192,8 @@ private:
     bool m_modelSwitchPending = false;
     QString m_pendingUserContent;
     QHash<QString, QString> m_sessionAppliedModel;
+    QList<qint64> m_pendingToolActivityIds;
+    qint64 m_nextToolPosition = 1;
+    QString m_lastCopiedText;
+    QString m_workspaceActionError;
 };

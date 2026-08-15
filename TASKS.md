@@ -11,10 +11,11 @@ tasks/
 ├── README.md
 ├── phase-0-native-foundation.md
 ├── phase-1-local-chat-state.md
-└── phase-2-pikaclaw-chat.md
+├── phase-2-pikaclaw-chat.md
+└── phase-3-agent-and-workspace-ux.md
 ```
 
-`phase-0-native-foundation.md` and `phase-1-local-chat-state.md` are historical execution evidence. Do not reopen Phase 0 or Phase 1 work.
+`phase-0-native-foundation.md`, `phase-1-local-chat-state.md`, and `phase-2-pikaclaw-chat.md` are historical execution evidence. Do not reopen Phase 0, Phase 1, or Phase 2 work.
 
 Future phase task files are created only after the current phase handoff is accepted.
 

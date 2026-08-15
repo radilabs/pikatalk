@@ -126,7 +126,7 @@ Useful environment variables:
 
 Local data locations are documented in `docs/local-storage.md`.
 
-The PikaClaw/PicoClaw chat protocol used by Phase 2 is documented in `docs/pikaclaw-api.md`. Gateway connection settings live in `$XDG_CONFIG_HOME/Radilabs/PikaTalk/pikatalk.conf`:
+The PikaClaw/PicoClaw chat and tool protocol used by Phase 2–3 is documented in `docs/pikaclaw-api.md`. Gateway connection settings live in `$XDG_CONFIG_HOME/Radilabs/PikaTalk/pikatalk.conf`:
 
 ```ini
 [picoClaw]
@@ -137,8 +137,18 @@ configPath=/home/naorw/.picoclaw/config.json
 
 Leave `token` empty to read the same-user PicoClaw pico channel token from `~/.picoclaw/.security.yml`. Do not commit that file or the token.
 
+Optional desktop launcher overrides (Phase 3):
+
+```ini
+[desktop]
+terminalCommand=konsole
+editorCommand=kate
+```
+
 A real local gateway send (requires `picoclaw gateway` already running):
 
 ```bash
 PIKATALK_LIVE_GATEWAY=1 ./build/bin/appcontroller_test liveGatewaySendIfEnabled
+PIKATALK_LIVE_GATEWAY=1 ./build/bin/appcontroller_test liveGatewayToolActivityIfEnabled
+PIKATALK_LIVE_DESKTOP=1 ./build/bin/appcontroller_test openWorkspaceActionsLaunchAgainstRealDirectory
 ```

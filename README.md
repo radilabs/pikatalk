@@ -2,13 +2,13 @@
 
 PikaTalk is a native Linux desktop client for PikaClaw.
 
-This repository currently contains **Phase 2 — PikaClaw Chat**.
+This repository currently contains **Phase 3 — Agent and Workspace UX**.
 
-It is a Qt 6 / Kirigami application that stores projects, chats, messages, workspace/model context, and drafts locally in SQLite, and sends real conversations through the local PicoClaw (PikaClaw) gateway.
+It is a Qt 6 / Kirigami application that stores projects, chats, messages, drafts, workspace/model context, and tool activity locally in SQLite, and sends real conversations through the local PicoClaw (PikaClaw) gateway.
 
 ## Current status
 
-Phase 2 provides:
+Phase 3 builds on Phase 2 chat and adds:
 
 * a native Plasma 6 window
 * selectable project and chat lists
@@ -18,6 +18,9 @@ Phase 2 provides:
 * real Send / streaming / Stop / Retry-Regenerate through Pico Protocol WebSocket
 * gateway communication state in the context area
 * drafts preserved when the gateway is unavailable
+* persisted PicoClaw tool activity (compact expandable UI; not stored as assistant messages)
+* copy message text and fenced code blocks
+* open the active workspace in the file manager, terminal, or editor
 
 PikaTalk does not start/stop the gateway and does not call model providers directly.
 
@@ -68,12 +71,14 @@ ctest --test-dir build --output-on-failure
 ## Documentation
 
 * [`docs/development.md`](docs/development.md) — build, run, and debug
-* [`docs/local-storage.md`](docs/local-storage.md) — XDG paths and SQLite schema version 1
-* [`docs/pikaclaw-api.md`](docs/pikaclaw-api.md) — observed PicoClaw chat API
+* [`docs/local-storage.md`](docs/local-storage.md) — XDG paths and SQLite schema (v2 includes tool activity)
+* [`docs/pikaclaw-api.md`](docs/pikaclaw-api.md) — observed PicoClaw chat and tool API
 * [`docs/handoffs/phase-1.md`](docs/handoffs/phase-1.md) — Phase 1 completion evidence
 * [`docs/handoffs/phase-2.md`](docs/handoffs/phase-2.md) — Phase 2 completion evidence
+* [`docs/handoffs/phase-3.md`](docs/handoffs/phase-3.md) — Phase 3 completion evidence
 * [`decisions/0002-local-sqlite-schema.md`](decisions/0002-local-sqlite-schema.md) — schema decisions later phases must respect
 * [`decisions/0003-pico-protocol-chat-transport.md`](decisions/0003-pico-protocol-chat-transport.md) — chat transport decision
+* [`decisions/0004-tool-activity-persistence.md`](decisions/0004-tool-activity-persistence.md) — tool activity persistence decision
 
 ## License
 
