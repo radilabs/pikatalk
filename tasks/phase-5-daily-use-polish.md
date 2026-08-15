@@ -726,7 +726,7 @@ Remove stale Phase 0–4 language that incorrectly describes current behavior.
 
 Recorded 2026-08-15.
 
-* **README sections updated:** rewrite of `README.md` for a first-time openSUSE/Plasma user: what PikaTalk is, v1 capabilities, what it is not (explicitly no tray / notifications / full-text search), supported platform, PicoClaw requirement (ports **18790** chat / **18800** launcher), build dependencies, build, local install (`cmake --install` to `$HOME/.local`), first run, XDG data/config/cache, version **1.0.0**, known limitations. Developer/architecture history and ADRs moved to links under `docs/` / `decisions/` / `docs/handoffs/`.
+* **README sections updated:** rewrite of `README.md` for a first-time openSUSE/Plasma user: what PikaTalk is, v1 capabilities (projects create/rename/delete; chats create/rename/archive/delete — archive is chats only), what it is not (explicitly no tray / notifications / full-text search), supported platform, PicoClaw requirement (ports **18790** chat / **18800** launcher), build dependencies, build, local install (`cmake --install` to `$HOME/.local`), first run (start PicoClaw Launcher / `picoclaw-launcher`, set `launcherPassword`, then PikaTalk Start; `picoclaw gateway` only as chat-only if the gateway is already up), XDG data/config/cache, version **1.0.0**, known limitations. Sidebar filter described as independent name/title match, not AND. Developer/architecture history and ADRs moved to links under `docs/` / `decisions/` / `docs/handoffs/`.
 * **docs updated:**
   * `docs/development.md` — version source of truth, v1 filter/shortcuts/no-tray notes, user README pointer; **launcher hygiene on 18800 kept here**; dropped “Phase 2–3/4” wording on current settings.
   * `docs/local-storage.md` — section titles no longer freeze the product at Phase 1/2/3; launcher keys described as current behavior.
@@ -741,6 +741,7 @@ Recorded 2026-08-15.
   * Shortcuts and Help → About match `Main.qml` / `AboutPikaTalk.qml`.
   * zypper package list matches `docs/development.md` plus T6’s validated devel stack; `qt6-network-devel` listed because CMake `find_package(Qt6 … Network)`.
 * **Stale information removed:** README no longer claims “currently Phase 4”; user-facing docs no longer present Phase 0–4 as the live product status. Historical handoffs under `docs/handoffs/` left as completion records.
+* **Review follow-up (2026-08-15):** Split project vs chat verbs so README does not claim project archive. First-run order is launcher → `launcherPassword` INI snippet → PikaTalk Start. `picoclaw gateway` documented as chat-only when the gateway is already up. Filter copy is independent name/title match, not AND.
 
 Did not implement P5-T8+, tray, notifications, or full-text search.
 

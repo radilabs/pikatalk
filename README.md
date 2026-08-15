@@ -6,9 +6,9 @@ PikaTalk is a native KDE Plasma desktop client for a **local PicoClaw (PikaClaw)
 
 ## What v1 can do
 
-* Organize work into projects and chats (create, rename, archive, delete)
+* Organize work into **projects** (create, rename, delete) and **chats** (create, rename, archive, delete). Archive exists for chats only.
 * Persist conversation history, drafts, workspace/model defaults, and tool activity in local SQLite
-* Filter the sidebar by **project name and chat title** (not message text)
+* Filter the sidebar independently: a project stays visible if its **name** matches, a chat if its **title** matches (not an AND of both; not message text)
 * Send, stream, stop, retry/regenerate; copy message text and fenced code
 * Show the active project, workspace, model, and gateway state
 * Open the active workspace in the file manager, terminal, or editor
@@ -112,11 +112,18 @@ kbuildsycoca6 --noincremental
 ## First run
 
 1. Install PicoClaw so `picoclaw` and `picoclaw-launcher` exist (typically `/usr/bin`).
-2. Start PikaTalk (`pikatalk` or the desktop entry).
-3. Create a project, then a chat. Set a workspace directory if you want agent tools to run somewhere other than PicoClaw’s default.
-4. For chat: the gateway must be listening on **18790**. You can start it from PikaTalk when the launcher on **18800** is running, or start PicoClaw yourself (`picoclaw gateway` / your usual launcher).
-5. For Start/Stop/Restart from PikaTalk, put the launcher dashboard password in `~/.config/Radilabs/PikaTalk/pikatalk.conf` (`picoClaw/launcherPassword`). Do not commit that file.
-6. Send a message. Version is under **Help → About PikaTalk**.
+2. Start **PicoClaw Launcher** from the Plasma application menu, or run `picoclaw-launcher`. That process must be listening on **18800** before PikaTalk can Start/Stop/Restart the gateway.
+3. Set the launcher dashboard password in `~/.config/Radilabs/PikaTalk/pikatalk.conf`. Do not commit that file:
+
+   ```ini
+   [picoClaw]
+   launcherPassword=your-dashboard-password
+   ```
+
+4. Start PikaTalk (`pikatalk` or the desktop entry). Create a project, then a chat. Set a workspace directory if you want agent tools to run somewhere other than PicoClaw’s default.
+5. Use PikaTalk **Start** (or Stop/Restart) so the gateway listens on **18790**, then send a message. Version is under **Help → About PikaTalk**.
+
+If the chat gateway is **already** up on **18790**, you can skip Start/Stop/Restart and talk through that socket. Starting the gateway yourself with `picoclaw gateway` is a chat-only alternative in that case; PikaTalk still needs the launcher on **18800** plus `launcherPassword` for lifecycle buttons.
 
 If the gateway is stopped or unreachable, drafts and local history stay on disk.
 
@@ -136,7 +143,7 @@ PikaTalk uses XDG paths (organization `Radilabs`, application `PikaTalk`). It do
 
 * Supported only on openSUSE Tumbleweed + Plasma 6 as above.
 * Requires a local PicoClaw; PikaTalk will not fetch models or install the gateway for you.
-* Sidebar filter matches titles only. There is no full-text message search.
+* Sidebar filter matches project names and chat titles independently (substring, case-insensitive). There is no full-text message search.
 * No tray icon and no notifications.
 * PicoClaw’s own session logs are not PikaTalk history; PikaTalk stores conversations locally.
 * Gateway Start/Stop/Restart need `picoclaw-launcher` on **18800** and the dashboard password; they do not use systemd.
