@@ -817,7 +817,9 @@ Did not implement P5-T9 (handoff), tray, notifications, or full-text search.
 
 ## Status
 
-* [x] Complete
+* [ ] Complete
+
+Live gateway stop/start/restart was not proven this session (no matching launcherPassword); automated fake-launcher lifecycle still PASS; user launcher/gateway left running.
 
 ---
 
