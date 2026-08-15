@@ -919,9 +919,24 @@ or:
 PHASE 5 HANDOFF: FAIL
 ```
 
+## Completion Evidence
+
+Recorded 2026-08-15.
+
+* Created `docs/handoffs/phase-5.md` with Deliverables, Selected Scope, Tests Performed, Results (all 11 criteria), Known Limitations, Deferred Work, Decisions, Release Readiness.
+* Confirmed in the handoff: no tray feature, no notifications, no full-text message search.
+* Criterion 7 recorded as: **PASS — no notifications or tray features were introduced in the selected Phase 5 scope.**
+* Fresh `ctest --test-dir build --output-on-failure` — **13/13 PASS**.
+* P5-T8 live gateway stop/start/restart was **not** re-run (no `launcherPassword` in local config). Criterion 10 judged PASS from Phase 4 live lifecycle PASS, fake-launcher unit lifecycle, live chat/tools, and full `ctest`.
+* No Phase 6. No Future Phase Candidates implemented.
+
+```text
+PHASE 5 HANDOFF: PASS
+```
+
 ## Status
 
-* [ ] Complete
+* [x] Complete
 
 ---
 
