@@ -23,6 +23,10 @@ CMakeLists.txt.user
 moc_*.cpp
 qrc_*.cpp
 
+# Local secrets / machine-only PicoClaw overrides (never commit passwords)
+pikatalk.conf
+**/pikatalk.conf
+
 # Editor / OS
 *~
 *.swp

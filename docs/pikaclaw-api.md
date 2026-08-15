@@ -21,7 +21,7 @@ Do not put tokens, API keys, or `.security.yml` contents in this repository.
 | Default model | `step-3.7-flash` (`picoclaw model`) |
 | Default workspace | `~/.picoclaw/workspace` |
 
-A separate launcher listens on `127.0.0.1:18800`. That process is **not** the chat gateway. Phase 2 does not use launcher start/stop/restart APIs.
+A separate launcher listens on `127.0.0.1:18800`. That process is **not** the chat gateway. Phase 4 uses it for gateway start/stop/restart (see **Gateway lifecycle** below).
 
 ## Reachability
 
@@ -234,11 +234,122 @@ Server error shape:
 }
 ```
 
-## Out of scope (do not use as Phase 2/3 chat transport)
+## Out of scope (do not use as chat transport)
 
-* `POST /api/gateway/start|stop|restart` and other launcher lifecycle routes
 * Direct calls to model provider HTTP APIs
 * Treating PicoClaw session JSONL as PikaTalk conversation history
+* Launcher routes unrelated to gateway lifecycle (config editor, logs viewer, models catalog UI, etc.)
+
+## Gateway lifecycle (Phase 4)
+
+Observed on PicoClaw 0.3.1 with `picoclaw-launcher` on `127.0.0.1:18800` and chat gateway on `127.0.0.1:18790`.
+
+| Layer | Bind | Role |
+| --- | --- | --- |
+| Chat gateway | `127.0.0.1:18790` | Pico Protocol WebSocket + `GET /health` |
+| Launcher | `127.0.0.1:18800` | Dashboard + **gateway start/stop/restart** |
+
+Starting `picoclaw-launcher` may also start the chat gateway process automatically when a default model is configured.
+
+### Authentication
+
+Unauthenticated:
+
+* `GET /api/auth/status` → `{"authenticated":bool,"initialized":bool}`
+
+First-time setup (when `initialized` is false):
+
+```http
+POST /api/auth/setup
+{"password":"...","confirm":"..."}
+```
+
+Login (required for lifecycle routes):
+
+```http
+POST /api/auth/login
+{"password":"..."}
+```
+
+Success sets HttpOnly cookie `picoclaw_launcher_auth` (`SameSite=Lax`). Subsequent lifecycle calls must send that cookie. Wrong password → `401 {"error":"invalid password"}`. Missing auth → `401 {"error":"unauthorized"}`.
+
+The Pico channel chat token is **not** accepted as launcher auth.
+
+PikaTalk stores the launcher password only in local config (`picoClaw/launcherPassword`). Never commit it.
+
+### Status and version
+
+```http
+GET /api/gateway/status
+```
+
+Sanitized running example:
+
+```json
+{
+  "gateway_status": "running",
+  "gateway_version": "0.3.1",
+  "pid": 67209,
+  "gateway_start_allowed": true,
+  "gateway_restart_required": false,
+  "config_default_model": "step-3.7-flash",
+  "boot_default_model": "step-3.7-flash"
+}
+```
+
+Stopped example omits `pid` / `gateway_version` and sets `"gateway_status":"stopped"`.
+
+When start is blocked (e.g. missing model credentials):
+
+* `gateway_start_allowed`: false
+* `gateway_start_reason`: human-readable string
+* `POST /api/gateway/start` → `400 {"status":"precondition_failed","message":"..."}`
+
+```http
+GET /api/system/version
+```
+
+```json
+{
+  "version": "0.3.1",
+  "git_commit": "2cf030d2",
+  "build_time": "2026-07-03T07:10:50Z",
+  "go_version": "1.25.11"
+}
+```
+
+`GET /api/version` is **404** on this launcher build.
+
+Complementary chat reachability (no launcher auth):
+
+```http
+GET http://127.0.0.1:18790/health
+→ {"status":"ok","uptime":"...","pid":...}
+```
+
+### Start / stop / restart
+
+All require launcher session cookie.
+
+| Method | Path | Observed success body |
+| --- | --- | --- |
+| POST | `/api/gateway/start` | `{"status":"ok","pid":...}` (also ok if already running) |
+| POST | `/api/gateway/stop` | `{"status":"ok","pid":...}` or `{"status":"not_running"}` |
+| POST | `/api/gateway/restart` | `{"status":"ok","pid":...}` (new pid) |
+
+After stop, chat `GET /health` fails to connect. After start/restart, chat health returns ok again.
+
+Failure examples:
+
+* Launcher down / wrong port → TCP connection failure
+* No cookie → `401 {"error":"unauthorized"}`
+* Start blocked by credentials → `400 precondition_failed`
+
+See `decisions/0005-picoclaw-launcher-lifecycle.md`.
+
+### Developer warning: temporary launchers
+
+Live Phase 4 discovery/tests must not leave a disposable `picoclaw-launcher` on `127.0.0.1:18800`. That process owns the dashboard auth DB for its `HOME`. A leftover temp launcher makes the user’s normal password fail and blocks the desktop menu from starting another instance. Prefer the user’s running launcher, or stop the regular one only for the duration of a temp probe and restore it afterward. See `docs/development.md` (Live PicoClaw launcher hygiene).
 
 ## Tool activity (Phase 3)
 

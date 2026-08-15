@@ -10,6 +10,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QSettings>
 #include <QUrlQuery>
 #include <QUuid>
@@ -30,6 +32,84 @@ AppController::AppController(QObject *parent)
     });
     connect(&m_gateway, &PicoClawClient::lastErrorChanged, this, &AppController::gatewayStateChanged);
     connect(&m_gateway, &PicoClawClient::messageReceived, this, &AppController::onGatewayMessage);
+
+    m_healthPollTimer.setInterval(500);
+    connect(&m_healthPollTimer, &QTimer::timeout, this, [this]() {
+        QNetworkReply *reply = m_healthNam.get(QNetworkRequest(chatHealthUrl()));
+        connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+            reply->deleteLater();
+            const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            const bool healthy = reply->error() == QNetworkReply::NoError && status == 200;
+            if (healthy) {
+                m_healthPollTimer.stop();
+                m_lifecyclePhase = QStringLiteral("reconnecting");
+                Q_EMIT lifecycleChanged();
+                connectToGateway();
+                m_lifecycleBusy = false;
+                m_pendingLifecycleAction.clear();
+                m_lifecyclePhase.clear();
+                refreshGatewayLifecycle();
+                return;
+            }
+            ++m_healthPollAttempts;
+            if (m_healthPollAttempts >= 40) {
+                m_healthPollTimer.stop();
+                m_lifecycleBusy = false;
+                m_lifecycleError = QStringLiteral("Gateway did not become healthy after lifecycle command");
+                m_lifecyclePhase.clear();
+                Q_EMIT lifecycleChanged();
+            }
+        });
+    });
+
+    connect(&m_lifecycle, &PicoClawLifecycleClient::statusFinished, this, [this](const PicoClawLifecycleStatus &status) {
+        if (!status.ok) {
+            m_lifecycleError = status.error;
+            if (m_lifecycleStatus.isEmpty()) {
+                m_lifecycleStatus = QStringLiteral("unknown");
+            }
+        } else {
+            m_lifecycleStatus = status.gatewayStatus;
+            m_startAllowed = status.startAllowed;
+            if (!status.gatewayVersion.isEmpty()) {
+                m_gatewayVersion = status.gatewayVersion;
+            }
+            if (status.error.isEmpty()) {
+                m_lifecycleError.clear();
+            }
+        }
+        Q_EMIT lifecycleChanged();
+    });
+    connect(&m_lifecycle, &PicoClawLifecycleClient::versionFinished, this, [this](const PicoClawLifecycleVersion &version) {
+        if (version.ok && !version.version.isEmpty()) {
+            m_gatewayVersion = version.version;
+            Q_EMIT lifecycleChanged();
+        }
+    });
+    connect(&m_lifecycle, &PicoClawLifecycleClient::commandFinished, this, [this](const QString &command, const PicoClawLifecycleCommandResult &result) {
+        if (!result.ok) {
+            m_lifecycleBusy = false;
+            m_lifecycleError = result.error;
+            m_lifecyclePhase.clear();
+            m_pendingLifecycleAction.clear();
+            Q_EMIT lifecycleChanged();
+            return;
+        }
+        m_lifecycleError.clear();
+        if (command == QStringLiteral("stop")) {
+            disconnectFromGateway();
+            m_lifecycleStatus = QStringLiteral("stopped");
+            m_lifecycleBusy = false;
+            m_lifecyclePhase.clear();
+            m_pendingLifecycleAction.clear();
+            Q_EMIT lifecycleChanged();
+            refreshGatewayLifecycle();
+            return;
+        }
+        m_lifecyclePhase = QStringLiteral("reconnecting");
+        Q_EMIT lifecycleChanged();
+        pollChatHealthThenReconnect();
+    });
 }
 
 AppController::~AppController()
@@ -172,6 +252,167 @@ QString AppController::gatewayError() const
 QUrl AppController::gatewayEndpoint() const
 {
     return m_gateway.endpoint();
+}
+
+QString AppController::gatewayEndpointDisplay() const
+{
+    return m_baseGatewayEndpoint.isValid() ? m_baseGatewayEndpoint.toString() : m_gateway.endpoint().toString();
+}
+
+QString AppController::gatewayVersion() const
+{
+    return m_gatewayVersion;
+}
+
+QString AppController::lifecycleStatus() const
+{
+    return m_lifecycleStatus;
+}
+
+QString AppController::lifecycleError() const
+{
+    return m_lifecycleError;
+}
+
+QString AppController::lifecyclePhase() const
+{
+    return m_lifecyclePhase;
+}
+
+bool AppController::canStartGateway() const
+{
+    return !m_lifecycleBusy && m_lifecycleStatus != QStringLiteral("running") && m_startAllowed;
+}
+
+bool AppController::canStopGateway() const
+{
+    return !m_lifecycleBusy && m_lifecycleStatus == QStringLiteral("running");
+}
+
+bool AppController::canRestartGateway() const
+{
+    return !m_lifecycleBusy && m_lifecycleStatus == QStringLiteral("running");
+}
+
+QUrl AppController::chatHealthUrl() const
+{
+    QUrl url = m_baseGatewayEndpoint.isValid() ? m_baseGatewayEndpoint : m_gateway.endpoint();
+    if (url.scheme() == QStringLiteral("ws")) {
+        url.setScheme(QStringLiteral("http"));
+    } else if (url.scheme() == QStringLiteral("wss")) {
+        url.setScheme(QStringLiteral("https"));
+    }
+    url.setPath(QStringLiteral("/health"));
+    url.setQuery(QString());
+    url.setFragment(QString());
+    return url;
+}
+
+void AppController::ensureLifecycleLogin(const std::function<void(bool)> &then)
+{
+    if (m_lifecycle.hasSession()) {
+        then(true);
+        return;
+    }
+    if (m_lifecycle.password().isEmpty()) {
+        m_lifecycleError = QStringLiteral("Launcher password is not configured (picoClaw/launcherPassword)");
+        Q_EMIT lifecycleChanged();
+        then(false);
+        return;
+    }
+    QObject::connect(
+        &m_lifecycle,
+        &PicoClawLifecycleClient::loginFinished,
+        this,
+        [this, then](bool ok, const QString &error) {
+            if (!ok) {
+                m_lifecycleError = error;
+                Q_EMIT lifecycleChanged();
+            }
+            then(ok);
+        },
+        Qt::SingleShotConnection);
+    m_lifecycle.login();
+}
+
+void AppController::pollChatHealthThenReconnect()
+{
+    m_healthPollAttempts = 0;
+    m_healthPollTimer.start();
+}
+
+void AppController::refreshGatewayLifecycle()
+{
+    ensureLifecycleLogin([this](bool ok) {
+        if (!ok) {
+            return;
+        }
+        m_lifecycle.refreshStatus();
+        m_lifecycle.refreshVersion();
+    });
+}
+
+void AppController::startLocalGateway()
+{
+    if (m_lifecycleBusy) {
+        return;
+    }
+    m_lifecycleBusy = true;
+    m_lifecyclePhase = QStringLiteral("starting");
+    m_lifecycleError.clear();
+    m_pendingLifecycleAction = QStringLiteral("start");
+    Q_EMIT lifecycleChanged();
+    ensureLifecycleLogin([this](bool ok) {
+        if (!ok) {
+            m_lifecycleBusy = false;
+            m_lifecyclePhase.clear();
+            Q_EMIT lifecycleChanged();
+            return;
+        }
+        m_lifecycle.startGateway();
+    });
+}
+
+void AppController::stopLocalGateway()
+{
+    if (m_lifecycleBusy) {
+        return;
+    }
+    m_lifecycleBusy = true;
+    m_lifecyclePhase = QStringLiteral("stopping");
+    m_lifecycleError.clear();
+    m_pendingLifecycleAction = QStringLiteral("stop");
+    Q_EMIT lifecycleChanged();
+    ensureLifecycleLogin([this](bool ok) {
+        if (!ok) {
+            m_lifecycleBusy = false;
+            m_lifecyclePhase.clear();
+            Q_EMIT lifecycleChanged();
+            return;
+        }
+        m_lifecycle.stopGateway();
+    });
+}
+
+void AppController::restartLocalGateway()
+{
+    if (m_lifecycleBusy) {
+        return;
+    }
+    m_lifecycleBusy = true;
+    m_lifecyclePhase = QStringLiteral("restarting");
+    m_lifecycleError.clear();
+    m_pendingLifecycleAction = QStringLiteral("restart");
+    Q_EMIT lifecycleChanged();
+    ensureLifecycleLogin([this](bool ok) {
+        if (!ok) {
+            m_lifecycleBusy = false;
+            m_lifecyclePhase.clear();
+            Q_EMIT lifecycleChanged();
+            return;
+        }
+        m_lifecycle.restartGateway();
+    });
 }
 
 QVariantList AppController::availableModels() const
@@ -817,6 +1058,8 @@ void AppController::loadGatewaySettings(const QString &configDirectory)
     const PicoClawConnectionSettings settings = loadPicoClawConnectionSettings(configDirectory);
     configureGateway(settings.endpoint, settings.token);
     m_picoConfigPath = settings.picoConfigPath;
+    m_lifecycle.setBaseUrl(settings.launcherUrl);
+    m_lifecycle.setPassword(settings.launcherPassword);
     m_availableModels.clear();
     const QStringList names = loadPicoClawModelNames(m_picoConfigPath);
     for (const QString &name : names) {
@@ -824,6 +1067,8 @@ void AppController::loadGatewaySettings(const QString &configDirectory)
     }
     Q_EMIT availableModelsChanged();
     refreshModelAvailability();
+    Q_EMIT gatewayStateChanged();
+    refreshGatewayLifecycle();
 }
 
 void AppController::refreshModelAvailability()

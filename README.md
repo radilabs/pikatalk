@@ -2,13 +2,13 @@
 
 PikaTalk is a native Linux desktop client for PikaClaw.
 
-This repository currently contains **Phase 3 — Agent and Workspace UX**.
+This repository currently contains **Phase 4 — Gateway Management**.
 
-It is a Qt 6 / Kirigami application that stores projects, chats, messages, drafts, workspace/model context, and tool activity locally in SQLite, and sends real conversations through the local PicoClaw (PikaClaw) gateway.
+It is a Qt 6 / Kirigami application that stores projects, chats, messages, drafts, workspace/model context, and tool activity locally in SQLite, sends real conversations through the local PicoClaw (PikaClaw) gateway, and can start/stop/restart that local gateway via the PicoClaw launcher.
 
 ## Current status
 
-Phase 3 builds on Phase 2 chat and adds:
+Phase 4 builds on Phase 3 and adds:
 
 * a native Plasma 6 window
 * selectable project and chat lists
@@ -21,8 +21,9 @@ Phase 3 builds on Phase 2 chat and adds:
 * persisted PicoClaw tool activity (compact expandable UI; not stored as assistant messages)
 * copy message text and fenced code blocks
 * open the active workspace in the file manager, terminal, or editor
+* local gateway Start / Stop / Restart via PicoClaw launcher HTTP (endpoint + version visible)
 
-PikaTalk does not start/stop the gateway and does not call model providers directly.
+PikaTalk does not install/upgrade PicoClaw and does not call model providers directly.
 
 ## Target platform
 
@@ -76,9 +77,11 @@ ctest --test-dir build --output-on-failure
 * [`docs/handoffs/phase-1.md`](docs/handoffs/phase-1.md) — Phase 1 completion evidence
 * [`docs/handoffs/phase-2.md`](docs/handoffs/phase-2.md) — Phase 2 completion evidence
 * [`docs/handoffs/phase-3.md`](docs/handoffs/phase-3.md) — Phase 3 completion evidence
+* [`docs/handoffs/phase-4.md`](docs/handoffs/phase-4.md) — Phase 4 completion evidence
 * [`decisions/0002-local-sqlite-schema.md`](decisions/0002-local-sqlite-schema.md) — schema decisions later phases must respect
 * [`decisions/0003-pico-protocol-chat-transport.md`](decisions/0003-pico-protocol-chat-transport.md) — chat transport decision
 * [`decisions/0004-tool-activity-persistence.md`](decisions/0004-tool-activity-persistence.md) — tool activity persistence decision
+* [`decisions/0005-picoclaw-launcher-lifecycle.md`](decisions/0005-picoclaw-launcher-lifecycle.md) — local gateway lifecycle decision
 
 ## License
 

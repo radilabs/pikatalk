@@ -22,7 +22,12 @@ target_sources(pikatalk
     messageformatting.h
     workspaceactions.cpp
     workspaceactions.h
+    picoclawlifecycle.cpp
+    picoclawlifecycle.h
 )
+
+# already added above - ensure appcontroller_test links lifecycle
+
 
 ecm_target_qml_sources(pikatalk
     SOURCES

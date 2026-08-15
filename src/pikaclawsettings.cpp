@@ -6,6 +6,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QProcessEnvironment>
 #include <QSettings>
 
 QUrl defaultPicoClawEndpoint()
@@ -195,6 +196,7 @@ PicoClawConnectionSettings loadPicoClawConnectionSettings(const QString &pikaTal
     PicoClawConnectionSettings settings;
     settings.endpoint = defaultPicoClawEndpoint();
     settings.picoConfigPath = QDir::homePath() + QStringLiteral("/.picoclaw/config.json");
+    settings.launcherUrl = QUrl(QStringLiteral("http://127.0.0.1:18800"));
 
     QSettings ini(QDir(pikaTalkConfigDirectory).filePath(QStringLiteral("pikatalk.conf")), QSettings::IniFormat);
     const QString endpoint = ini.value(QStringLiteral("picoClaw/endpoint")).toString().trimmed();
@@ -205,6 +207,14 @@ PicoClawConnectionSettings loadPicoClawConnectionSettings(const QString &pikaTal
     const QString configPath = ini.value(QStringLiteral("picoClaw/configPath")).toString().trimmed();
     if (!configPath.isEmpty()) {
         settings.picoConfigPath = configPath;
+    }
+    const QString launcher = ini.value(QStringLiteral("picoClaw/launcherUrl")).toString().trimmed();
+    if (!launcher.isEmpty()) {
+        settings.launcherUrl = QUrl(launcher);
+    }
+    settings.launcherPassword = ini.value(QStringLiteral("picoClaw/launcherPassword")).toString();
+    if (settings.launcherPassword.isEmpty()) {
+        settings.launcherPassword = qEnvironmentVariable("PIKATALK_LAUNCHER_PASSWORD");
     }
 
     if (settings.token.isEmpty()) {

@@ -147,6 +147,8 @@ Keys under `[picoClaw]`:
 * `endpoint` — default `ws://127.0.0.1:18790/pico/ws`
 * `token` — Pico channel bearer token. If empty, PikaTalk reads `~/.picoclaw/.security.yml`
 * `configPath` — PicoClaw `config.json` used for `model_list` discovery
+* `launcherUrl` — default `http://127.0.0.1:18800` (Phase 4 lifecycle)
+* `launcherPassword` — PicoClaw launcher dashboard password (Phase 4). Never commit. Env fallback: `PIKATALK_LAUNCHER_PASSWORD`
 
 See `docs/pikaclaw-api.md` and `decisions/0003-pico-protocol-chat-transport.md`.
 

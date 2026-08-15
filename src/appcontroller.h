@@ -2,13 +2,18 @@
 
 #include "database.h"
 #include "pikaclawclient.h"
+#include "picoclawlifecycle.h"
 
 #include <QHash>
 #include <QJsonObject>
+#include <QNetworkAccessManager>
 #include <QObject>
+#include <QTimer>
 #include <QUrl>
 #include <QVariant>
 #include <QVariantList>
+
+#include <functional>
 
 class AppController : public QObject
 {
@@ -33,6 +38,14 @@ class AppController : public QObject
     Q_PROPERTY(QString pendingDeletionMessage READ pendingDeletionMessage NOTIFY pendingDeletionChanged)
     Q_PROPERTY(QString gatewayState READ gatewayState NOTIFY gatewayStateChanged)
     Q_PROPERTY(QString gatewayError READ gatewayError NOTIFY gatewayStateChanged)
+    Q_PROPERTY(QString gatewayVersion READ gatewayVersion NOTIFY lifecycleChanged)
+    Q_PROPERTY(QString lifecycleStatus READ lifecycleStatus NOTIFY lifecycleChanged)
+    Q_PROPERTY(QString lifecycleError READ lifecycleError NOTIFY lifecycleChanged)
+    Q_PROPERTY(QString lifecyclePhase READ lifecyclePhase NOTIFY lifecycleChanged)
+    Q_PROPERTY(bool canStartGateway READ canStartGateway NOTIFY lifecycleChanged)
+    Q_PROPERTY(bool canStopGateway READ canStopGateway NOTIFY lifecycleChanged)
+    Q_PROPERTY(bool canRestartGateway READ canRestartGateway NOTIFY lifecycleChanged)
+    Q_PROPERTY(QString gatewayEndpointDisplay READ gatewayEndpointDisplay NOTIFY gatewayStateChanged)
     Q_PROPERTY(QVariantList availableModels READ availableModels NOTIFY availableModelsChanged)
     Q_PROPERTY(bool selectedModelUnavailable READ selectedModelUnavailable NOTIFY availableModelsChanged)
     Q_PROPERTY(bool isGenerating READ isGenerating NOTIFY chatTurnChanged)
@@ -70,6 +83,14 @@ public:
     QString gatewayState() const;
     QString gatewayError() const;
     QUrl gatewayEndpoint() const;
+    QString gatewayEndpointDisplay() const;
+    QString gatewayVersion() const;
+    QString lifecycleStatus() const;
+    QString lifecycleError() const;
+    QString lifecyclePhase() const;
+    bool canStartGateway() const;
+    bool canStopGateway() const;
+    bool canRestartGateway() const;
     QVariantList availableModels() const;
     bool selectedModelUnavailable() const;
     bool isGenerating() const;
@@ -109,6 +130,10 @@ public:
     Q_INVOKABLE void setGatewayReconnectIntervalMs(int milliseconds);
     Q_INVOKABLE void connectToGateway();
     Q_INVOKABLE void disconnectFromGateway();
+    Q_INVOKABLE void refreshGatewayLifecycle();
+    Q_INVOKABLE void startLocalGateway();
+    Q_INVOKABLE void stopLocalGateway();
+    Q_INVOKABLE void restartLocalGateway();
     Q_INVOKABLE bool sendChatMessage(const QString &content);
     Q_INVOKABLE bool stopGeneration();
     Q_INVOKABLE bool retryOrRegenerate();
@@ -129,6 +154,7 @@ Q_SIGNALS:
     void currentDraftChanged();
     void pendingDeletionChanged();
     void gatewayStateChanged();
+    void lifecycleChanged();
     void availableModelsChanged();
     void chatTurnChanged();
     void toolActivitiesChanged();
@@ -158,8 +184,22 @@ private:
     void sendPicoUserContent(const QString &content);
     void sendSelectedModelSwitch();
     bool sessionNeedsModelSwitch() const;
+    void ensureLifecycleLogin(const std::function<void(bool)> &then);
+    void pollChatHealthThenReconnect();
+    QUrl chatHealthUrl() const;
 
     LocalDatabase m_db;
+    PicoClawLifecycleClient m_lifecycle;
+    QNetworkAccessManager m_healthNam;
+    QTimer m_healthPollTimer;
+    int m_healthPollAttempts = 0;
+    QString m_pendingLifecycleAction;
+    QString m_lifecycleStatus;
+    QString m_gatewayVersion;
+    QString m_lifecycleError;
+    QString m_lifecyclePhase;
+    bool m_lifecycleBusy = false;
+    bool m_startAllowed = true;
     QVariantList m_projects;
     QVariantList m_chats;
     QVariantList m_messages;

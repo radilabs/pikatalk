@@ -52,6 +52,8 @@ add_executable(appcontroller_test
     ${CMAKE_SOURCE_DIR}/src/messageformatting.h
     ${CMAKE_SOURCE_DIR}/src/workspaceactions.cpp
     ${CMAKE_SOURCE_DIR}/src/workspaceactions.h
+    ${CMAKE_SOURCE_DIR}/src/picoclawlifecycle.cpp
+    ${CMAKE_SOURCE_DIR}/src/picoclawlifecycle.h
 )
 
 target_include_directories(appcontroller_test PRIVATE
@@ -69,6 +71,26 @@ target_link_libraries(appcontroller_test
 )
 
 add_test(NAME appcontroller_test COMMAND appcontroller_test)
+
+add_executable(pikaclawlifecycle_test
+    picoclawlifecycle_test.cpp
+    ${CMAKE_SOURCE_DIR}/src/picoclawlifecycle.cpp
+    ${CMAKE_SOURCE_DIR}/src/picoclawlifecycle.h
+)
+
+target_include_directories(pikaclawlifecycle_test PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/tests
+)
+
+target_link_libraries(pikaclawlifecycle_test
+    PRIVATE
+    Qt6::Core
+    Qt6::Network
+    Qt6::Test
+)
+
+add_test(NAME pikaclawlifecycle_test COMMAND pikaclawlifecycle_test)
 
 add_executable(pikaclawclient_test
     pikaclawclient_test.cpp

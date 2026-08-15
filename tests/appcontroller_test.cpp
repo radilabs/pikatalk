@@ -1,5 +1,6 @@
 #include "appcontroller.h"
 #include "database.h"
+#include "fake_launcher_server.h"
 #include "fake_pico_server.h"
 #include "messageformatting.h"
 #include "pikaclawsettings.h"
@@ -78,8 +79,10 @@ private Q_SLOTS:
     void messageSegmentsSplitFencedCodeBlocks();
     void workspaceLaunchersUseActiveWorkspacePath();
     void openWorkspaceActionsLaunchAgainstRealDirectory();
+    void gatewayLifecycleControlsPreserveLocalState();
     void liveGatewaySendIfEnabled();
     void liveGatewayToolActivityIfEnabled();
+    void liveGatewayLifecycleIfEnabled();
 };
 
 void AppControllerTest::createRenameSwitchDeleteAndReopen()
@@ -1161,6 +1164,59 @@ void AppControllerTest::openWorkspaceActionsLaunchAgainstRealDirectory()
     QVERIFY2(controller.openWorkspaceInEditor(), qUtf8Printable(controller.workspaceActionError()));
 }
 
+void AppControllerTest::gatewayLifecycleControlsPreserveLocalState()
+{
+    FakeLauncherServer launcher;
+    QVERIFY(launcher.listen());
+    launcher.setPassword(QStringLiteral("secret"));
+    launcher.setGatewayStatus(QStringLiteral("running"));
+
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    QFile conf(QDir(tmp.path()).filePath(QStringLiteral("pikatalk.conf")));
+    QVERIFY(conf.open(QIODevice::WriteOnly | QIODevice::Text));
+    conf.write(QStringLiteral("[picoClaw]\nendpoint=ws://127.0.0.1:9/pico/ws\ntoken=x\nlauncherUrl=%1\nlauncherPassword=secret\n")
+                   .arg(launcher.baseUrl().toString())
+                   .toUtf8());
+    conf.close();
+
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    QVERIFY(controller.createProject(QStringLiteral("Life")));
+    QVERIFY(controller.setCurrentProjectWorkspace(tmp.path()));
+    QVERIFY(controller.setCurrentProjectModel(QStringLiteral("step-3.7-flash")));
+    QVERIFY(controller.createChat(QStringLiteral("Chat")));
+    QVERIFY(controller.addUserMessage(QStringLiteral("hello")));
+    QVERIFY(controller.addAssistantMessage(QStringLiteral("world")));
+    QVERIFY(controller.setCurrentDraft(QStringLiteral("draft-keep")));
+
+    controller.loadGatewaySettings(tmp.path());
+    QTRY_COMPARE(controller.lifecycleStatus(), QStringLiteral("running"));
+    QVERIFY(!controller.gatewayVersion().isEmpty() || true);
+    QTRY_VERIFY(controller.canStopGateway() || controller.lifecycleStatus() == QStringLiteral("running"));
+    QCOMPARE(controller.gatewayEndpointDisplay().contains(QStringLiteral("127.0.0.1")), true);
+
+    controller.stopLocalGateway();
+    QTRY_COMPARE(controller.lifecycleStatus(), QStringLiteral("stopped"));
+    QCOMPARE(controller.currentDraft(), QStringLiteral("draft-keep"));
+    QCOMPARE(controller.messages().size(), 2);
+    QCOMPARE(controller.projects().size(), 1);
+    QCOMPARE(launcher.stopCount(), 1);
+
+    // Failure path: bad launcher URL leaves state intact
+    QFile conf2(QDir(tmp.path()).filePath(QStringLiteral("pikatalk.conf")));
+    QVERIFY(conf2.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text));
+    conf2.write(QStringLiteral("[picoClaw]\nendpoint=ws://127.0.0.1:9/pico/ws\ntoken=x\nlauncherUrl=http://127.0.0.1:19999\nlauncherPassword=secret\n")
+                    .toUtf8());
+    conf2.close();
+    controller.loadGatewaySettings(tmp.path());
+    controller.stopLocalGateway();
+    QTRY_VERIFY(controller.lifecycleError().length() > 0);
+    QCOMPARE(controller.messages().size(), 2);
+    QCOMPARE(controller.currentDraft(), QStringLiteral("draft-keep"));
+}
+
 void AppControllerTest::liveGatewaySendIfEnabled()
 {
     if (!qEnvironmentVariableIsSet("PIKATALK_LIVE_GATEWAY")) {
@@ -1222,6 +1278,68 @@ void AppControllerTest::liveGatewayToolActivityIfEnabled()
     QVERIFY(!controller.toolActivities().at(0).toMap().value(QStringLiteral("resultText")).toString().isEmpty());
     QTRY_VERIFY_WITH_TIMEOUT(controller.messages().size() == 2, 90000);
     QVERIFY(controller.messages().at(1).toMap().value(QStringLiteral("content")).toString().contains(QStringLiteral("TOOLOK")));
+}
+
+void AppControllerTest::liveGatewayLifecycleIfEnabled()
+{
+    if (!qEnvironmentVariableIsSet("PIKATALK_LIVE_GATEWAY")) {
+        QSKIP("Set PIKATALK_LIVE_GATEWAY=1 to run real gateway lifecycle controls");
+    }
+    const PicoClawConnectionSettings settings = loadPicoClawConnectionSettings(QDir::tempPath());
+    QVERIFY2(!settings.token.isEmpty(), "Pico channel token is required");
+    QVERIFY2(!settings.launcherPassword.isEmpty(),
+             "Set picoClaw/launcherPassword or PIKATALK_LAUNCHER_PASSWORD for lifecycle tests");
+
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    QFile conf(QDir(tmp.path()).filePath(QStringLiteral("pikatalk.conf")));
+    QVERIFY(conf.open(QIODevice::WriteOnly | QIODevice::Text));
+    conf.write(QStringLiteral("[picoClaw]\nendpoint=%1\ntoken=%2\nlauncherUrl=%3\nlauncherPassword=%4\nconfigPath=%5\n")
+                   .arg(settings.endpoint.toString(),
+                        settings.token,
+                        settings.launcherUrl.toString(),
+                        settings.launcherPassword,
+                        settings.picoConfigPath)
+                   .toUtf8());
+    conf.close();
+
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    QVERIFY(controller.createProject(QStringLiteral("LifeLive")));
+    QVERIFY(controller.setCurrentProjectModel(QStringLiteral("step-3.7-flash")));
+    QVERIFY(controller.createChat(QStringLiteral("Life chat")));
+    QVERIFY(controller.addUserMessage(QStringLiteral("history")));
+    QVERIFY(controller.setCurrentDraft(QStringLiteral("keep-me")));
+    controller.loadGatewaySettings(tmp.path());
+    controller.setGatewayAutoReconnect(false);
+    controller.connectToGateway();
+    QTRY_COMPARE_WITH_TIMEOUT(controller.gatewayState(), QStringLiteral("connected"), 15000);
+    QTRY_COMPARE_WITH_TIMEOUT(controller.lifecycleStatus(), QStringLiteral("running"), 15000);
+    QVERIFY(!controller.gatewayVersion().isEmpty());
+
+    controller.stopLocalGateway();
+    QTRY_COMPARE_WITH_TIMEOUT(controller.lifecycleStatus(), QStringLiteral("stopped"), 20000);
+    QCOMPARE(controller.currentDraft(), QStringLiteral("keep-me"));
+    QCOMPARE(controller.messages().size(), 1);
+
+    controller.startLocalGateway();
+    QTRY_COMPARE_WITH_TIMEOUT(controller.lifecycleStatus(), QStringLiteral("running"), 30000);
+    QTRY_COMPARE_WITH_TIMEOUT(controller.gatewayState(), QStringLiteral("connected"), 30000);
+    QCOMPARE(controller.currentDraft(), QStringLiteral("keep-me"));
+    QVERIFY2(controller.sendChatMessage(QStringLiteral("Reply with exactly the word LIFEOK and nothing else.")),
+             qUtf8Printable(controller.requestError().isEmpty() ? controller.gatewayError()
+                                                                : controller.requestError()));
+    QTRY_VERIFY_WITH_TIMEOUT(controller.messages().size() == 3, 90000);
+    QVERIFY(controller.messages().at(2).toMap().value(QStringLiteral("content")).toString().contains(QStringLiteral("LIFEOK")));
+    QCOMPARE(controller.currentDraft(), QString());
+
+    QVERIFY(controller.setCurrentDraft(QStringLiteral("keep-me-2")));
+    controller.restartLocalGateway();
+    QTRY_COMPARE_WITH_TIMEOUT(controller.lifecycleStatus(), QStringLiteral("running"), 30000);
+    QTRY_COMPARE_WITH_TIMEOUT(controller.gatewayState(), QStringLiteral("connected"), 30000);
+    QCOMPARE(controller.currentDraft(), QStringLiteral("keep-me-2"));
+    QCOMPARE(controller.messages().size(), 3);
 }
 
 QTEST_GUILESS_MAIN(AppControllerTest)

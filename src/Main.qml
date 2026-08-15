@@ -53,14 +53,34 @@ Kirigami.ApplicationWindow {
                     Controls.Label {
                         objectName: "gatewayPlaceholder"
                         text: {
+                            if (app.lifecyclePhase === "starting")
+                                return i18n("Gateway: Starting…");
+                            if (app.lifecyclePhase === "stopping")
+                                return i18n("Gateway: Stopping…");
+                            if (app.lifecyclePhase === "restarting" || app.lifecyclePhase === "reconnecting")
+                                return i18n("Gateway: Reconnecting…");
+                            if (app.lifecycleStatus === "stopped")
+                                return i18n("Gateway: Stopped");
                             if (app.gatewayState === "connected")
                                 return i18n("Gateway: Connected");
                             if (app.gatewayState === "connecting")
                                 return i18n("Gateway: Connecting");
-                            if (app.gatewayState === "error")
-                                return i18n("Gateway: Error — %1", app.gatewayError);
+                            if (app.gatewayState === "error" || app.lifecycleError.length > 0)
+                                return i18n("Gateway: Error — %1", app.lifecycleError.length > 0 ? app.lifecycleError : app.gatewayError);
                             return i18n("Gateway: Disconnected");
                         }
+                    }
+                    Controls.Label {
+                        objectName: "gatewayEndpointLabel"
+                        text: app.gatewayEndpointDisplay.length > 0
+                              ? i18n("Endpoint: %1", app.gatewayEndpointDisplay)
+                              : i18n("Endpoint: None")
+                    }
+                    Controls.Label {
+                        objectName: "gatewayVersionLabel"
+                        text: app.gatewayVersion.length > 0
+                              ? i18n("Version: %1", app.gatewayVersion)
+                              : i18n("Version: Unknown")
                     }
                 }
 
@@ -132,13 +152,35 @@ Kirigami.ApplicationWindow {
                         enabled: app.currentWorkspace.length > 0
                         onClicked: app.openWorkspaceInEditor()
                     }
+                    Controls.Button {
+                        objectName: "startGatewayButton"
+                        text: i18n("Start gateway")
+                        enabled: app.canStartGateway
+                        onClicked: app.startLocalGateway()
+                    }
+                    Controls.Button {
+                        objectName: "stopGatewayButton"
+                        text: i18n("Stop gateway")
+                        enabled: app.canStopGateway
+                        onClicked: app.stopLocalGateway()
+                    }
+                    Controls.Button {
+                        objectName: "restartGatewayButton"
+                        text: i18n("Restart gateway")
+                        enabled: app.canRestartGateway
+                        onClicked: app.restartLocalGateway()
+                    }
                 }
 
                 Controls.Label {
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
-                    visible: app.workspaceActionError.length > 0
-                    text: i18n("Workspace action: %1", app.workspaceActionError)
+                    visible: app.workspaceActionError.length > 0 || app.lifecycleError.length > 0
+                    text: {
+                        if (app.lifecycleError.length > 0)
+                            return i18n("Gateway action: %1", app.lifecycleError);
+                        return i18n("Workspace action: %1", app.workspaceActionError);
+                    }
                 }
             }
         }

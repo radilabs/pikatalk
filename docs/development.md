@@ -133,9 +133,32 @@ The PikaClaw/PicoClaw chat and tool protocol used by Phase 2–3 is documented i
 endpoint=ws://127.0.0.1:18790/pico/ws
 token=
 configPath=/home/naorw/.picoclaw/config.json
+launcherUrl=http://127.0.0.1:18800
+launcherPassword=
 ```
 
 Leave `token` empty to read the same-user PicoClaw pico channel token from `~/.picoclaw/.security.yml`. Do not commit that file or the token.
+
+`launcherPassword` is required for Start/Stop/Restart (Phase 4). You may also set `PIKATALK_LAUNCHER_PASSWORD` in the environment for tests. Do not commit the password.
+
+### Live PicoClaw launcher hygiene
+
+Port `18800` is the **developer’s real** PicoClaw launcher dashboard. Only one launcher can bind it.
+
+If agents or live tests start a temporary launcher (for example with `HOME=/tmp/...` and a throwaway password):
+
+* **Stop the regular launcher first** so port `18800` is free, or use another port and never leave it bound to `18800` after the session.
+* **Always tear down temp/test launchers** when finished (`kill` the `picoclaw-launcher` PID, remove `/tmp/pika-*` homes if used).
+* Announce clearly while a temp launcher is running: the web UI at `http://127.0.0.1:18800` will **not** accept the user’s normal password until the real launcher (`HOME=$HOME`) is restored.
+* Prefer live lifecycle tests against the **already running** user launcher with `PIKATALK_LAUNCHER_PASSWORD` set to the real dashboard password, instead of spawning a second launcher on `18800`.
+* A leftover temp launcher is why the menu “PicoClaw Launcher” entry can fail to start (address already in use) and why login with the usual password fails.
+
+Restore the normal launcher after tests, for example:
+
+```bash
+pkill -f 'picoclaw-launcher'   # only if you intend to replace it
+picoclaw-launcher -no-browser &
+```
 
 Optional desktop launcher overrides (Phase 3):
 
@@ -151,4 +174,5 @@ A real local gateway send (requires `picoclaw gateway` already running):
 PIKATALK_LIVE_GATEWAY=1 ./build/bin/appcontroller_test liveGatewaySendIfEnabled
 PIKATALK_LIVE_GATEWAY=1 ./build/bin/appcontroller_test liveGatewayToolActivityIfEnabled
 PIKATALK_LIVE_DESKTOP=1 ./build/bin/appcontroller_test openWorkspaceActionsLaunchAgainstRealDirectory
+PIKATALK_LIVE_GATEWAY=1 PIKATALK_LAUNCHER_PASSWORD=… ./build/bin/appcontroller_test liveGatewayLifecycleIfEnabled
 ```

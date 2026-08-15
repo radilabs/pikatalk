@@ -9,6 +9,8 @@ struct PicoClawConnectionSettings {
     QUrl endpoint;
     QString token;
     QString picoConfigPath;
+    QUrl launcherUrl;
+    QString launcherPassword;
 };
 
 QUrl defaultPicoClawEndpoint();
