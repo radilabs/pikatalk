@@ -530,17 +530,52 @@ Create/use a long conversation and test:
 
 ## Completion Evidence
 
-Record:
+Recorded 2026-08-15.
 
-* approximate conversation size tested
-* behaviors exercised
-* any reproducible issue found
-* smallest fix applied, if any
-* restart result
+* **Conversation size tested:** 60 user/assistant turns (**120 messages**) in one chat, plus **6 fenced C++ code blocks** (every 10th assistant reply), **8 tool activities** (7 ok + 1 error, ~400-character results) attached to the last assistant message, and a second **2-message** chat for switching. After send-another-message: **121 messages**.
+* **Behaviors exercised:**
+  1. Offscreen `ListView` `positionViewAtBeginning` / `positionViewAtEnd` / beginning again on 128 rows (120 messages + 8 tools) — no freeze (`offscreenListViewScrollsLongConversationWithoutFreeze`).
+  2. Copy full message text (`copyText` / `lastCopiedText`).
+  3. Copy fenced code via `messageSegments` (`kind: code` contains `int fib(int n)`).
+  4. Tool rows stay in the timeline; QML details start collapsed (`toolActivityDetails` `visible: false`, summary toggles).
+  5. `addUserMessage` after the long history (`one more question after the long history`).
+  6. Switch to short chat (2 messages, 0 tools) and back (120 messages + 8 tools restored).
+  7–8. `openStore` restart: most recently active chat is the long chat; full history, tools, and extra user message return.
+  9. Drafts: long-chat draft survives switch and restart; short-chat draft isolated.
+  10. Offscreen `./build/bin/pikatalk` with seeded `XDG_DATA_HOME` started in ~2.5s, no QML/SQLite load failure, no `picoclaw-launcher` spawn in process output.
+* **Reproducible issue found:** none that blocked daily use. Existing Qt `ListView` + full `QVariantList` load is adequate at this size (`openStore` well under 2s).
+* **Fix applied:** none (no pagination, virtualization framework, or `AppController` rewrite).
+* **Restart result:** selected chat is the globally most recently active non-archived chat (existing Phase 1 semantics). Long-chat content, tools, and drafts restore when that chat is selected.
+
+### Tests
+
+New `longchat_test` (no product-code change):
+
+```text
+QT_QPA_PLATFORM=offscreen ./build/bin/longchat_test
+PASS   : LongChatTest::longConversationReloadsAfterRestartAndChatSwitch()
+PASS   : LongChatTest::draftsSurviveOnLongChatAcrossSwitchAndRestart()
+PASS   : LongChatTest::copyTextAndCodeSegmentsRemainUsableOnLongHistory()
+PASS   : LongChatTest::conversationListViewStaysPlainQtListView()
+PASS   : LongChatTest::offscreenListViewScrollsLongConversationWithoutFreeze()
+PASS   : LongChatTest::offscreenPikaTalkLoadsSeededLongChat()
+Totals: 8 passed, 0 failed
+```
+
+Full suite:
+
+```text
+cmake --build build && ctest --test-dir build --output-on-failure
+100% tests passed, 12 tests passed
+```
+
+Launcher hygiene: did not start a temp `picoclaw-launcher` on 18800. User launcher pid 71127 was already running and was left untouched.
+
+Did not implement P5-T6+, tray, notifications, or full-text search. Did not refactor `AppController` or split `Main.qml`.
 
 ## Status
 
-* [ ] Complete
+* [x] Complete
 
 ---
 

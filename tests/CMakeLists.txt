@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Test Sql Network Gui)
+find_package(Qt6 REQUIRED COMPONENTS Test Sql Network Gui Qml Quick)
 
 add_executable(applicationpaths_test
     applicationpaths_test.cpp
@@ -110,6 +110,50 @@ target_link_libraries(errorcopy_test
 )
 
 add_test(NAME errorcopy_test COMMAND errorcopy_test)
+
+add_executable(longchat_test
+    longchat_test.cpp
+    ${CMAKE_SOURCE_DIR}/src/appcontroller.cpp
+    ${CMAKE_SOURCE_DIR}/src/appcontroller.h
+    ${CMAKE_SOURCE_DIR}/src/database.cpp
+    ${CMAKE_SOURCE_DIR}/src/database.h
+    ${CMAKE_SOURCE_DIR}/src/pikaclawclient.cpp
+    ${CMAKE_SOURCE_DIR}/src/pikaclawclient.h
+    ${CMAKE_SOURCE_DIR}/src/pikaclawsettings.cpp
+    ${CMAKE_SOURCE_DIR}/src/pikaclawsettings.h
+    ${CMAKE_SOURCE_DIR}/src/messageformatting.cpp
+    ${CMAKE_SOURCE_DIR}/src/messageformatting.h
+    ${CMAKE_SOURCE_DIR}/src/workspaceactions.cpp
+    ${CMAKE_SOURCE_DIR}/src/workspaceactions.h
+    ${CMAKE_SOURCE_DIR}/src/picoclawlifecycle.cpp
+    ${CMAKE_SOURCE_DIR}/src/picoclawlifecycle.h
+)
+
+target_include_directories(longchat_test PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/tests
+)
+
+target_link_libraries(longchat_test
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Network
+    Qt6::Qml
+    Qt6::Quick
+    Qt6::Sql
+    Qt6::Test
+)
+
+target_compile_definitions(longchat_test
+    PRIVATE
+    PIKATALK_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    PIKATALK_BIN="$<TARGET_FILE:pikatalk>"
+)
+
+add_dependencies(longchat_test pikatalk)
+add_test(NAME longchat_test COMMAND longchat_test)
+set_tests_properties(longchat_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 add_executable(uistates_test
     uistates_test.cpp
