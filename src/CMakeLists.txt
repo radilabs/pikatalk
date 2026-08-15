@@ -22,6 +22,8 @@ target_sources(pikatalk
     pikaclawsettings.h
     messageformatting.cpp
     messageformatting.h
+    titlefilter.cpp
+    titlefilter.h
     workspaceactions.cpp
     workspaceactions.h
     picoclawlifecycle.cpp

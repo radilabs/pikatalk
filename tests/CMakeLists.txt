@@ -42,6 +42,42 @@ target_compile_definitions(applicationversion_test
 
 add_test(NAME applicationversion_test COMMAND applicationversion_test)
 
+add_executable(titlefilter_test
+    titlefilter_test.cpp
+    ${CMAKE_SOURCE_DIR}/src/titlefilter.cpp
+    ${CMAKE_SOURCE_DIR}/src/titlefilter.h
+    ${CMAKE_SOURCE_DIR}/src/appcontroller.cpp
+    ${CMAKE_SOURCE_DIR}/src/appcontroller.h
+    ${CMAKE_SOURCE_DIR}/src/database.cpp
+    ${CMAKE_SOURCE_DIR}/src/database.h
+    ${CMAKE_SOURCE_DIR}/src/pikaclawclient.cpp
+    ${CMAKE_SOURCE_DIR}/src/pikaclawclient.h
+    ${CMAKE_SOURCE_DIR}/src/pikaclawsettings.cpp
+    ${CMAKE_SOURCE_DIR}/src/pikaclawsettings.h
+    ${CMAKE_SOURCE_DIR}/src/messageformatting.cpp
+    ${CMAKE_SOURCE_DIR}/src/messageformatting.h
+    ${CMAKE_SOURCE_DIR}/src/workspaceactions.cpp
+    ${CMAKE_SOURCE_DIR}/src/workspaceactions.h
+    ${CMAKE_SOURCE_DIR}/src/picoclawlifecycle.cpp
+    ${CMAKE_SOURCE_DIR}/src/picoclawlifecycle.h
+)
+
+target_include_directories(titlefilter_test PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/tests
+)
+
+target_link_libraries(titlefilter_test
+    PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Network
+    Qt6::Sql
+    Qt6::Test
+)
+
+add_test(NAME titlefilter_test COMMAND titlefilter_test)
+
 add_executable(database_test
     database_test.cpp
     ${CMAKE_SOURCE_DIR}/src/database.cpp

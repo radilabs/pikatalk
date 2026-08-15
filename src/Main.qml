@@ -296,8 +296,19 @@ Kirigami.ApplicationWindow {
                 Controls.SplitView.minimumWidth: Kirigami.Units.gridUnit * 12
 
                 ColumnLayout {
+                    id: sidebarColumn
                     anchors.fill: parent
                     spacing: Kirigami.Units.smallSpacing
+
+                    readonly property var filteredProjects: titleMatch.apply(app.projects, "name", titleFilterField.text)
+                    readonly property var filteredChats: titleMatch.apply(app.chats, "title", titleFilterField.text)
+
+                    Kirigami.SearchField {
+                        id: titleFilterField
+                        objectName: "titleFilterField"
+                        Layout.fillWidth: true
+                        placeholderText: i18n("Filter projects and chats")
+                    }
 
                     Controls.Label {
                         text: i18n("Projects")
@@ -309,10 +320,10 @@ Kirigami.ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 8
                         clip: true
-                        model: app.projects
+                        model: sidebarColumn.filteredProjects
                         currentIndex: {
-                            for (let i = 0; i < app.projects.length; ++i) {
-                                if (app.projects[i].id === app.currentProjectId) {
+                            for (let i = 0; i < sidebarColumn.filteredProjects.length; ++i) {
+                                if (sidebarColumn.filteredProjects[i].id === app.currentProjectId) {
                                     return i;
                                 }
                             }
@@ -381,10 +392,10 @@ Kirigami.ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         clip: true
-                        model: app.chats
+                        model: sidebarColumn.filteredChats
                         currentIndex: {
-                            for (let i = 0; i < app.chats.length; ++i) {
-                                if (app.chats[i].id === app.currentChatId) {
+                            for (let i = 0; i < sidebarColumn.filteredChats.length; ++i) {
+                                if (sidebarColumn.filteredChats[i].id === app.currentChatId) {
                                     return i;
                                 }
                             }

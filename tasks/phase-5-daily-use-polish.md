@@ -197,16 +197,47 @@ Verify:
 
 ## Completion Evidence
 
-Record:
+Recorded 2026-08-15.
 
-* filtering behavior
-* project test
-* chat test
-* persistence regression result
+* **Filtering behavior:** In-memory, case-insensitive substring match on project `name` and chat `title` only. Empty/whitespace filter shows the full lists. `Kirigami.SearchField` (`titleFilterField`) filters both sidebar ListViews via standalone `filterItemsByTitle` / `TitleMatch::apply`. Persisted `app.projects` / `app.chats` are not replaced. Message bodies are not searched. No SQLite FTS or schema change.
+* **Project test:** `TitleFilterTest::projectNameMatchIsCaseInsensitive` — `"kItChEn"` keeps `"Kitchen Reno"` and drops `"Garden"` / `"Work Notes"`.
+* **Chat test:** `TitleFilterTest::chatTitleMatchIsCaseInsensitive` — `"SHOP"` keeps `"Shopping list"`. Non-matches: `nonMatchingTitlesAreOmitted`. Clear: `clearingFilterRestoresFullList`.
+* **Persistence / restart / archive:** `TitleFilterTest::persistenceAndArchiveAreUnchangedByFiltering` — three projects and three chats (one archived, one deleted). Filtering does not change `controller.projects()` / `controller.chats()`. Reopen restores 3 projects and 2 active chats; archived chat remains only in `listChatIds(..., includeArchived=true)`.
+
+### Tests
+
+TDD RED (test compiled before `titlefilter.h` existed):
+
+```text
+/home/naorw/dev/radilabs/pikatalk/tests/titlefilter_test.cpp:1:10: fatal error: titlefilter.h: No such file or directory
+    1 | #include "titlefilter.h"
+```
+
+GREEN after helper + QML wiring:
+
+```text
+./build/bin/titlefilter_test
+PASS   : TitleFilterTest::emptyFilterKeepsAllItems()
+PASS   : TitleFilterTest::projectNameMatchIsCaseInsensitive()
+PASS   : TitleFilterTest::chatTitleMatchIsCaseInsensitive()
+PASS   : TitleFilterTest::nonMatchingTitlesAreOmitted()
+PASS   : TitleFilterTest::clearingFilterRestoresFullList()
+PASS   : TitleFilterTest::messageBodiesAreNotSearched()
+PASS   : TitleFilterTest::filterDoesNotMutateSourceList()
+PASS   : TitleFilterTest::persistenceAndArchiveAreUnchangedByFiltering()
+Totals: 10 passed, 0 failed
+```
+
+Full suite:
+
+```text
+cmake --build build && ctest --test-dir build --output-on-failure
+100% tests passed, 8 tests passed
+```
 
 ## Status
 
-* [ ] Complete
+* [x] Complete
 
 ---
 

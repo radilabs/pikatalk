@@ -2,6 +2,7 @@
 #include "applicationidentity.h"
 #include "applicationpaths.h"
 #include "database.h"
+#include "titlefilter.h"
 
 #include <QApplication>
 #include <QDebug>
@@ -69,6 +70,7 @@ int main(int argc, char *argv[])
     QQmlApplicationEngine engine;
     KLocalization::setupLocalizedContext(&engine);
     engine.rootContext()->setContextProperty(QStringLiteral("app"), controller);
+    engine.rootContext()->setContextProperty(QStringLiteral("titleMatch"), new TitleMatch(&app));
     engine.loadFromModule("org.radilabs.pikatalk", "Main");
 
     if (engine.rootObjects().isEmpty()) {
