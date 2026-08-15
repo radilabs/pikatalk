@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.radilabs.pikatalk</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>PikaTalk</name>
+  <summary>Native Plasma client for PicoClaw</summary>
+  <description>
+    <p>
+      PikaTalk is a native KDE Plasma desktop client for the local PicoClaw
+      (PikaClaw) gateway. It keeps projects, chats, and messages on this
+      computer and talks to PicoClaw over the local Pico Protocol WebSocket.
+    </p>
+  </description>
+  <url type="homepage">https://github.com/radilabs/pikatalk</url>
+  <launchable type="desktop-id">org.radilabs.pikatalk.desktop</launchable>
+  <provides>
+    <binary>pikatalk</binary>
+  </provides>
+  <icon type="stock">org.radilabs.pikatalk</icon>
+  <categories>
+    <category>Utility</category>
+    <category>Network</category>
+  </categories>
+  <developer id="org.radilabs">
+    <name translate="no">Radilabs</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.0.0" date="2026-08-15"/>
+  </releases>
+</component>

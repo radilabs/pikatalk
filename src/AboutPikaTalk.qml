@@ -7,7 +7,7 @@ Kirigami.AboutPage {
     aboutData: {
         "displayName": "PikaTalk",
         "productName": "pikatalk",
-        "componentName": "pikatalk",
+        "componentName": "org.radilabs.pikatalk",
         "shortDescription": i18n("Plasma desktop client for PicoClaw"),
         "homepage": "",
         "bugAddress": "",

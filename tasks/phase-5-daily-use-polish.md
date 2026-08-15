@@ -648,17 +648,35 @@ Where practical, perform the documented dependency/install process from a clean 
 
 ## Completion Evidence
 
-Record:
+Recorded 2026-08-15 on openSUSE Tumbleweed (`VERSION_ID=20260813`) + KDE Plasma 6. No RPM/spec: `cmake --install` into `$HOME/.local` is enough for a launchable Plasma app.
 
-* required packages
-* configure/build/install commands
-* installed artifacts
-* desktop launch result
-* validation commands/results
+* **Required packages:** `cmake`, `ninja`, `gcc-c++`, `kf6-extra-cmake-modules`, `kf6-kirigami-devel`, `kf6-ki18n-devel`, `kf6-kcoreaddons-devel`, `kf6-kiconthemes-devel`, `kf6-qqc2-desktop-style`, `kf6-qqc2-desktop-style-devel`, `qt6-base-devel`, `qt6-declarative-devel`, `qt6-quickcontrols2-devel`. Validation extras already present: `appstreamcli`, `desktop-file-validate`, `kiconfinder6`, `gtk-launch`, `kbuildsycoca6`.
+* **Configure/build/install:**
+  ```bash
+  cmake -B build -G Ninja --install-prefix "$HOME/.local"
+  cmake --build build
+  cmake --install build
+  ```
+  (Verified from a clean `build-p5t6-verify` directory using the same flags; that verify tree was removed afterward.)
+* **Installed artifacts:**
+  * `$HOME/.local/bin/pikatalk`
+  * `$HOME/.local/share/applications/org.radilabs.pikatalk.desktop` (`Name=PikaTalk`, `Exec=pikatalk`, `Icon=org.radilabs.pikatalk`, `StartupWMClass=pikatalk`)
+  * `$HOME/.local/share/metainfo/org.radilabs.pikatalk.metainfo.xml`
+  * `$HOME/.local/share/icons/hicolor/scalable/apps/org.radilabs.pikatalk.svg`
+* **Desktop launch result:** `QT_QPA_PLATFORM=offscreen gtk-launch org.radilabs.pikatalk` started `/home/naorw/.local/bin/pikatalk`. Direct `pikatalk` from `$PATH` also ran. Process torn down after the check; no extra PicoClaw launcher was spawned (existing user launcher PID 71127 was already running).
+* **Validation commands/results:**
+  * `desktop-file-validate` on source and installed desktop file — OK
+  * `appstreamcli validate --no-net` on source and installed metainfo — `Validation was successful`
+  * `kiconfinder6 org.radilabs.pikatalk` → `$HOME/.local/share/icons/hicolor/scalable/apps/org.radilabs.pikatalk.svg`
+  * `kbuildsycoca6 --noincremental` ran after install
+  * `gtk-update-icon-cache -f $HOME/.local/share/icons/hicolor` printed `No theme index file` (user hicolor prefix has no `index.theme`; Plasma still resolved the SVG via `kiconfinder6`)
+  * Installed and `./build/bin/pikatalk` both logged unchanged XDG paths: `~/.local/share/Radilabs/PikaTalk`, `~/.config/Radilabs/PikaTalk`, `~/.cache/Radilabs/PikaTalk`
+  * Uninstalled build-tree `./build/bin/pikatalk` still starts
+  * `ctest --test-dir build --output-on-failure` — 13/13 passed, including new `packaging_test`
 
 ## Status
 
-* [ ] Complete
+* [x] Complete
 
 ---
 

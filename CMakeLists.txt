@@ -38,5 +38,7 @@ if(BUILD_TESTING)
 endif()
 
 install(PROGRAMS org.radilabs.pikatalk.desktop DESTINATION ${KDE_INSTALL_APPDIR})
+install(FILES org.radilabs.pikatalk.metainfo.xml DESTINATION ${KDE_INSTALL_METAINFODIR})
+install(FILES icons/org.radilabs.pikatalk.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)
 
 feature_summary(WHAT ALL INCLUDE_QUIET_PACKAGES FATAL_ON_MISSING_REQUIRED_PACKAGES)

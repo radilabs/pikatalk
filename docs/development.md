@@ -44,7 +44,7 @@ cmake --build build
 
 The executable is `build/bin/pikatalk`.
 
-Automated checks (`applicationpaths_test`, `database_test`, `appcontroller_test`, `pikaclawclient_test`, and `appstreamtest`):
+Automated checks include `packaging_test` (desktop/icon/metainfo install metadata) plus the existing unit tests and ECM `appstreamtest`:
 
 ```bash
 ctest --test-dir build --output-on-failure
@@ -58,14 +58,27 @@ From the repository root:
 ./build/bin/pikatalk
 ```
 
-Optional local install, which places the binary in `~/.local/bin` and the desktop file in `~/.local/share/applications`:
+Optional local install, which places the binary, desktop entry, AppStream metainfo, and hicolor icon under the chosen prefix (`$HOME/.local` when using the configure command above):
 
 ```bash
 cmake --install build
 pikatalk
 ```
 
-Installing the desktop file is what lets Plasma/xdg-desktop-portal recognize app ID `org.radilabs.pikatalk`. Running from `build/bin/pikatalk` without installing still starts the application.
+Installed artifacts:
+
+* `$HOME/.local/bin/pikatalk`
+* `$HOME/.local/share/applications/org.radilabs.pikatalk.desktop`
+* `$HOME/.local/share/metainfo/org.radilabs.pikatalk.metainfo.xml`
+* `$HOME/.local/share/icons/hicolor/scalable/apps/org.radilabs.pikatalk.svg`
+
+Installing the desktop file is what lets Plasma/xdg-desktop-portal recognize app ID `org.radilabs.pikatalk`. Running from `build/bin/pikatalk` without installing still starts the application. After install, refresh the desktop database if the launcher does not appear immediately:
+
+```bash
+update-desktop-database "$HOME/.local/share/applications"
+gtk-update-icon-cache -f "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
+kbuildsycoca6 --noincremental 2>/dev/null || true
+```
 
 ## 5. Make a visible UI change
 

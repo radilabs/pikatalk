@@ -155,6 +155,23 @@ add_dependencies(longchat_test pikatalk)
 add_test(NAME longchat_test COMMAND longchat_test)
 set_tests_properties(longchat_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+add_executable(packaging_test
+    packaging_test.cpp
+)
+
+target_link_libraries(packaging_test
+    PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+target_compile_definitions(packaging_test
+    PRIVATE
+    PIKATALK_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+)
+
+add_test(NAME packaging_test COMMAND packaging_test)
+
 add_executable(uistates_test
     uistates_test.cpp
 )

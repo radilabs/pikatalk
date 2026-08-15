@@ -2,7 +2,7 @@
 Name=PikaTalk
 Comment=Native desktop client for PikaClaw
 Exec=pikatalk
-Icon=internet-chat
+Icon=org.radilabs.pikatalk
 Type=Application
 Terminal=false
 Categories=Utility;Qt;KDE;
