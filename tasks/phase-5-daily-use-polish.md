@@ -801,16 +801,23 @@ At minimum:
 
 ## Completion Evidence
 
-Record:
+Recorded 2026-08-15 against existing user `picoclaw-launcher` PID **71127** and `picoclaw gateway` PID **71155** (`127.0.0.1:18790` `/health` `{"status":"ok"}`). No `HOME=/tmp` launcher spawned. Password never printed or committed (`~/.config/Radilabs/PikaTalk/pikatalk.conf` has no `launcherPassword`; login with the Phase 4 local test password was rejected).
 
-* full automated result
-* live tests
-* launcher hygiene result
-* regressions found/fixed
+* **Full automated result:** `ctest --test-dir build --output-on-failure` — **13/13 passed** in 5.53s (`appstreamtest`, `applicationpaths_test`, `applicationversion_test`, `titlefilter_test`, `shortcuts_test`, `errorcopy_test`, `longchat_test`, `packaging_test`, `uistates_test`, `database_test`, `appcontroller_test`, `pikaclawlifecycle_test`, `pikaclawclient_test`). Covers projects/chats/persistence/drafts/workspace+model selection, streaming/stop/retry-regenerate (fake gateway), tool activity persistence, title filter, shortcuts, long-chat restart, packaging.
+* **Live tests:**
+  * `PIKATALK_LIVE_GATEWAY=1 ./build/bin/appcontroller_test liveGatewaySendIfEnabled` — PASS (4055ms, assistant contained `LIVEOK`).
+  * `PIKATALK_LIVE_GATEWAY=1 ./build/bin/appcontroller_test liveGatewayToolActivityIfEnabled` — PASS (6183ms, tool activity then `TOOLOK`).
+  * `PIKATALK_LIVE_GATEWAY=1 ./build/bin/appcontroller_test liveGatewayLifecycleIfEnabled` — FAIL at `lifecycleStatus() == "running"` after 45s: launcher login failed (no local `launcherPassword` / `PIKATALK_LAUNCHER_PASSWORD` matching the running dashboard). Did not stop or restart the user gateway. Fake-launcher unit `gatewayLifecycleControlsPreserveLocalState` still PASS via `ctest`.
+  * `PIKATALK_LIVE_DESKTOP=1 ./build/bin/appcontroller_test openWorkspaceActionsLaunchAgainstRealDirectory` — PASS (file manager/terminal/editor against real temp dirs).
+  * Installed launch: `QT_QPA_PLATFORM=offscreen gtk-launch org.radilabs.pikatalk` started `$HOME/.local/bin/pikatalk`; logged XDG `Radilabs/PikaTalk` and `ws://127.0.0.1:18790/pico/ws`; process torn down after check. `desktop-file-validate` OK.
+* **Launcher hygiene result:** User launcher 71127 and gateway 71155 still running after all live tests; `/health` still 200; no leftover temp-HOME launchers. No extra PicoClaw processes started.
+* **Regressions found/fixed:** No product regressions found; no code changes in this task. Live lifecycle not executed against the real dashboard because the password is not in local PikaTalk config. **Test-harness incident:** after LIVE_DESKTOP, cleanup accidentally SIGTERM’d a pre-existing user Konsole (PID 1919) and a leftover Dolphin from an earlier workspace test (`/tmp/pikatalk-ws-omP1mX`) because the PID snapshot was not exported into the closer. Not a PikaTalk defect.
+
+Did not implement P5-T9 (handoff), tray, notifications, or full-text search.
 
 ## Status
 
-* [ ] Complete
+* [x] Complete
 
 ---
 
