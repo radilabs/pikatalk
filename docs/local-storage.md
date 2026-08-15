@@ -53,16 +53,75 @@ Resolved paths are logged at startup:
 PikaTalk data directory: ...
 PikaTalk config directory: ...
 PikaTalk cache directory: ...
+PikaTalk sqlite database: ...
 ```
 
-## Phase 0 contents
+## Phase 1 database
 
-Phase 0 proves that a SQLite database can be created under the application data directory.
+The production database is:
 
-The Phase 0 database file is:
+* `$XDG_DATA_HOME/Radilabs/PikaTalk/pikatalk.sqlite`
 
-* `$XDG_DATA_HOME/Radilabs/PikaTalk/phase0.sqlite`
+Do not reuse `phase0.sqlite`. That file was a Phase 0 proof with a `phase0_init` marker table. It is not migrated. If it still exists on disk, ignore it.
 
-It contains only a temporary `phase0_init` marker table. This is not the Phase 1 schema and must not be treated as the final data model.
+Schema decisions future work must respect are in `decisions/0002-local-sqlite-schema.md`.
 
-Real project, chat, message, draft, model, and gateway state begins in Phase 1.
+### Versioning
+
+Table `schema_version(version INTEGER PRIMARY KEY)` stores a single integer.
+
+Current version: **1**.
+
+On open:
+
+* If no version row exists, create version 1 tables and insert version `1`.
+* If the stored version is not `1`, open fails. Do not guess.
+* Later schema changes add version `n+1` and a migration from `n` to `n+1`. There is no ORM.
+
+`PRAGMA foreign_keys = ON` is required.
+
+### Tables (version 1)
+
+**projects**
+
+* `id`, `name`, `default_workspace`, `default_model`, `created_at`, `sort_order`
+* `default_workspace` and `default_model` are stored strings. Empty means unset. They are not discovered from a gateway.
+
+**chats**
+
+* `id`, `project_id` (FK to `projects.id` ON DELETE CASCADE)
+* `title`, `workspace_override`, `model_override`, `archived`, `created_at`, `last_active_at`, `sort_order`
+* A chat belongs to one project.
+* `workspace_override` / `model_override` are NULL when the chat inherits the project default, and non-NULL when overridden (including an explicit empty string).
+* `archived = 1` hides the chat from the default list without deleting messages or drafts.
+* Chat list order is `last_active_at DESC`.
+
+**messages**
+
+* `id`, `chat_id` (FK to `chats.id` ON DELETE CASCADE)
+* `role` CHECK (`user` or `assistant`)
+* `content`, `created_at`, `position`
+* `position` starts at 1 per chat and is the stable display order.
+* Tool activity is not stored in version 1. Later phases may add tables or columns keyed to `messages.id` without replacing this table.
+
+**drafts**
+
+* `chat_id` PRIMARY KEY (FK to `chats.id` ON DELETE CASCADE)
+* `content`, `updated_at`
+* One unfinished input per chat. Saving a draft does not create a message. Submit (Send) creates a user message and clears the draft.
+
+### Inheritance
+
+Effective workspace:
+
+1. If `chats.workspace_override` is not NULL, use it.
+2. Otherwise use `projects.default_workspace`.
+
+Effective model:
+
+1. If `chats.model_override` is not NULL, use it.
+2. Otherwise use `projects.default_model`.
+
+New chats are created with NULL overrides, so they inherit. Changing a project default updates inheriting chats. Clearing an override sets the column back to NULL.
+
+Deleting a project cascades to its chats, messages, and drafts.

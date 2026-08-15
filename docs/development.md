@@ -2,7 +2,7 @@
 
 Target environment: openSUSE Tumbleweed + KDE Plasma 6.
 
-PikaTalk is a Qt 6 / Kirigami desktop application. This document is the Phase 0 local build, run, and debug cycle.
+PikaTalk is a Qt 6 / Kirigami desktop application. This document is the local build, run, and debug cycle.
 
 ## 1. Install development dependencies
 
@@ -43,7 +43,7 @@ cmake --build build
 
 The executable is `build/bin/pikatalk`.
 
-Automated checks:
+Automated checks (`applicationpaths_test`, `database_test`, `appcontroller_test`, and `appstreamtest`):
 
 ```bash
 ctest --test-dir build --output-on-failure
@@ -68,7 +68,7 @@ Installing the desktop file is what lets Plasma/xdg-desktop-portal recognize app
 
 ## 5. Make a visible UI change
 
-Edit a string in `src/Main.qml`, for example a sidebar label or fake message.
+Edit a string in `src/Main.qml`, for example a sidebar label.
 
 QML is compiled into the binary, so a rebuild is required.
 
@@ -79,7 +79,7 @@ cmake --build build
 ./build/bin/pikatalk
 ```
 
-There is no live QML reload in this Phase 0 workflow.
+There is no live QML reload; rebuild and relaunch after QML edits.
 
 ## 7. Logs and debugging
 
@@ -87,7 +87,6 @@ Startup diagnostics and Qt/QML messages are written to stderr, including:
 
 * data / config / cache directories
 * SQLite database path
-* SQLite marker read result
 * directory or database errors
 * QML load failures
 
@@ -95,8 +94,7 @@ Example:
 
 ```text
 PikaTalk data directory: /home/naorw/.local/share/Radilabs/PikaTalk
-PikaTalk sqlite database: /home/naorw/.local/share/Radilabs/PikaTalk/phase0.sqlite
-PikaTalk sqlite marker: 1
+PikaTalk sqlite database: /home/naorw/.local/share/Radilabs/PikaTalk/pikatalk.sqlite
 ```
 
 Capture them with:

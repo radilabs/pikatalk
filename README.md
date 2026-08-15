@@ -2,26 +2,25 @@
 
 PikaTalk is a native Linux desktop client for PikaClaw.
 
-This repository currently contains **Phase 0 — Native Foundation**.
+This repository currently contains **Phase 1 — Local Chat State**.
 
-It is a Qt 6 / Kirigami application that opens a Plasma window with the intended layout, fake/static chat content, XDG application paths, and a SQLite initialization proof. It is not yet a working chat client.
+It is a Qt 6 / Kirigami application that stores projects, chats, messages, workspace/model context, and drafts locally in SQLite. It is not yet connected to PikaClaw.
 
 ## Current status
 
-Phase 0 provides:
+Phase 1 provides:
 
 * a native Plasma 6 window
-* a project/chat sidebar area
-* a conversation area
-* a message input area
-* an always-visible context area with placeholders for project, workspace, model, and gateway state
-* fake/static conversation content
+* selectable project and chat lists
+* persisted conversation history (local user and assistant messages)
+* project default workspace and model, with per-chat overrides
+* per-chat message drafts
+* an always-visible context area for project, workspace, model, and gateway
 * XDG data, config, and cache paths
-* a Phase 0-only SQLite marker database
+* SQLite database `pikatalk.sqlite` (schema version 1)
 
-The visible project, chat, workspace, model, and gateway values are placeholders.
+The gateway indicator is still a static Offline placeholder.
 
-* Real local project/chat state begins in Phase 1.
 * Real PikaClaw communication begins in Phase 2.
 
 ## Target platform
@@ -43,7 +42,7 @@ Development dependencies, configure/build/launch commands, and debugging notes a
 
 * [`docs/development.md`](docs/development.md)
 
-Local application paths are in:
+Local application paths and the SQLite schema are in:
 
 * [`docs/local-storage.md`](docs/local-storage.md)
 
@@ -59,8 +58,16 @@ sudo zypper install \
 
 cmake -B build -G Ninja --install-prefix "$HOME/.local"
 cmake --build build
+ctest --test-dir build --output-on-failure
 ./build/bin/pikatalk
 ```
+
+## Documentation
+
+* [`docs/development.md`](docs/development.md) — build, run, and debug
+* [`docs/local-storage.md`](docs/local-storage.md) — XDG paths and SQLite schema version 1
+* [`docs/handoffs/phase-1.md`](docs/handoffs/phase-1.md) — Phase 1 completion evidence
+* [`decisions/0002-local-sqlite-schema.md`](decisions/0002-local-sqlite-schema.md) — schema decisions later phases must respect
 
 ## License
 

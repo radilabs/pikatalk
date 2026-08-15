@@ -37,3 +37,22 @@ target_link_libraries(database_test
 )
 
 add_test(NAME database_test COMMAND database_test)
+
+add_executable(appcontroller_test
+    appcontroller_test.cpp
+    ${CMAKE_SOURCE_DIR}/src/appcontroller.cpp
+    ${CMAKE_SOURCE_DIR}/src/appcontroller.h
+    ${CMAKE_SOURCE_DIR}/src/database.cpp
+    ${CMAKE_SOURCE_DIR}/src/database.h
+)
+
+target_include_directories(appcontroller_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+target_link_libraries(appcontroller_test
+    PRIVATE
+    Qt6::Core
+    Qt6::Sql
+    Qt6::Test
+)
+
+add_test(NAME appcontroller_test COMMAND appcontroller_test)

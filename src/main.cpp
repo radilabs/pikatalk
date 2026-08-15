@@ -1,9 +1,11 @@
+#include "appcontroller.h"
 #include "applicationpaths.h"
 #include "database.h"
 
 #include <QApplication>
 #include <QDebug>
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
 #include <QQuickStyle>
 #include <KIconTheme>
 #include <KLocalizedQmlContext>
@@ -47,19 +49,13 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    const QString dbPath = phase0DatabasePath(paths.data);
+    const QString dbPath = LocalDatabase::databaseFilePath(paths.data);
+    auto *controller = new AppController(&app);
     QString dbError;
-    if (!initializePhase0Database(dbPath, &dbError)
-        || !writePhase0Marker(dbPath, QStringLiteral("initialized"), QStringLiteral("1"), &dbError)) {
+    if (!controller->openStore(dbPath, &dbError)) {
         qCritical() << "SQLite initialization failed:" << dbError;
     } else {
-        QString marker;
-        if (!readPhase0Marker(dbPath, QStringLiteral("initialized"), &marker, &dbError)) {
-            qCritical() << "SQLite read failed:" << dbError;
-        } else {
-            logApplicationPath("PikaTalk sqlite database:", dbPath);
-            qInfo().nospace() << "PikaTalk sqlite marker: " << qUtf8Printable(marker);
-        }
+        logApplicationPath("PikaTalk sqlite database:", dbPath);
     }
 
     QApplication::setStyle(QStringLiteral("breeze"));
@@ -69,6 +65,7 @@ int main(int argc, char *argv[])
 
     QQmlApplicationEngine engine;
     KLocalization::setupLocalizedContext(&engine);
+    engine.rootContext()->setContextProperty(QStringLiteral("app"), controller);
     engine.loadFromModule("org.radilabs.pikatalk", "Main");
 
     if (engine.rootObjects().isEmpty()) {

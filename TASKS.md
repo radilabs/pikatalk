@@ -2,15 +2,18 @@
 
 Detailed implementation tasks live under `tasks/`.
 
-Only the currently authorized phase has a detailed task file.
+Only the currently authorized phase has a detailed task file that should be executed.
 
 Current structure:
 
 ```text
 tasks/
 ├── README.md
-└── phase-0-native-foundation.md
+├── phase-0-native-foundation.md
+└── phase-1-local-chat-state.md
 ```
+
+`phase-0-native-foundation.md` is historical execution evidence. Do not reopen Phase 0 work.
 
 Future phase task files are created only after the current phase handoff is accepted.
 

@@ -12,6 +12,8 @@ target_sources(pikatalk
     applicationpaths.h
     database.cpp
     database.h
+    appcontroller.cpp
+    appcontroller.h
 )
 
 ecm_target_qml_sources(pikatalk
