@@ -1,0 +1,29 @@
+# Build
+/build/
+/build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+CMakeUserPresets.json
+compile_commands.json
+Testing/
+*.o
+*.a
+*.so
+
+# Qt / KDE
+CMakeLists.txt.user
+*.user
+*.autosave
+.qmlls.ini
+.cache/
+*.qmlc
+*.jsc
+moc_*.cpp
+qrc_*.cpp
+
+# Editor / OS
+*~
+*.swp
+.DS_Store

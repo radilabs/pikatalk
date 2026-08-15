@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=PikaTalk
+Comment=Native desktop client for PikaClaw
+Exec=pikatalk
+Icon=internet-chat
+Type=Application
+Terminal=false
+Categories=Utility;Qt;KDE;
+StartupWMClass=pikatalk
