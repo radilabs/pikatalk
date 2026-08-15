@@ -48,7 +48,7 @@ void PackagingTest::metainfoDeclaresAppIdAndVersion()
     QVERIFY(metainfo.contains(QStringLiteral("<id>org.radilabs.pikatalk</id>")));
     QVERIFY(metainfo.contains(QStringLiteral("type=\"desktop-application\"")));
     QVERIFY(metainfo.contains(QStringLiteral("<launchable type=\"desktop-id\">org.radilabs.pikatalk.desktop</launchable>")));
-    QVERIFY(metainfo.contains(QStringLiteral("<release version=\"1.0.0\"")));
+    QVERIFY(metainfo.contains(QStringLiteral("<release version=\"0.1.0\"")));
     QVERIFY(metainfo.contains(QStringLiteral("<binary>pikatalk</binary>")));
 }
 

@@ -2,7 +2,7 @@
 
 PikaTalk is a native KDE Plasma desktop client for a **local PicoClaw (PikaClaw) gateway**. It keeps projects, chats, drafts, and tool activity on this computer and sends conversations through PicoClaw. PicoClaw remains the execution layer; PikaTalk does not talk to model providers itself.
 
-**Version:** 1.0.0 (from `project(pikatalk VERSION …)` in `CMakeLists.txt`; also shown in **Help → About PikaTalk**).
+**Version:** 0.1.0 (from `project(pikatalk VERSION …)` in `CMakeLists.txt`; also shown in **Help → About PikaTalk**).
 
 ## What v1 can do
 

@@ -16,7 +16,7 @@ void ApplicationVersionTest::runtimeVersionMatchesBuildVersion()
     configureApplicationIdentity();
 
     QCOMPARE(QCoreApplication::applicationVersion(), QStringLiteral(PIKATALK_VERSION));
-    QCOMPARE(QCoreApplication::applicationVersion(), QStringLiteral("1.0.0"));
+    QCOMPARE(QCoreApplication::applicationVersion(), QStringLiteral("0.1.0"));
 }
 
 QTEST_GUILESS_MAIN(ApplicationVersionTest)

@@ -4,7 +4,7 @@
 
 Meaningful Phase 5 files and artifacts:
 
-* `CMakeLists.txt` — application version `1.0.0` (`project(pikatalk VERSION 1.0.0 …)`), passed as `PIKATALK_VERSION`
+* `CMakeLists.txt` — application version `0.1.0` (`project(pikatalk VERSION 0.1.0 …)`), passed as `PIKATALK_VERSION`
 * `src/main.cpp` — `QCoreApplication::setApplicationVersion(PIKATALK_VERSION)`
 * `src/AboutPikaTalk.qml` — Help → About PikaTalk (`Kirigami.AboutPage`, `Qt.application.version`)
 * `src/titlefilter.h` / `src/titlefilter.cpp` — in-memory case-insensitive project-name / chat-title filter
@@ -68,7 +68,7 @@ Phase 5 acceptance criteria from `PHASES.md`:
 | 6 | Application restart restores expected local state | PASS | `longchat_test` reopen restores selected chat, history, tools, drafts; Phase 1–4 persistence tests still in `ctest` |
 | 7 | Any notifications/tray features introduced are useful and non-annoying | **PASS — no notifications or tray features were introduced in the selected Phase 5 scope.** | |
 | 8 | Installation documentation works from a clean environment | PASS | P5-T6 install to `$HOME/.local`; P5-T7 README commands verified against the repo; `packaging_test` + AppStream/desktop validation |
-| 9 | Versioning is defined | PASS | Single source `1.0.0` in root CMake; `applicationversion_test`; About page |
+| 9 | Versioning is defined | PASS | Single source `0.1.0` in root CMake; `applicationversion_test`; About page |
 | 10 | Core functionality from Phases 0–4 remains intact | PASS | Fresh `ctest` 13/13; live chat + tool activity; fake-launcher lifecycle; Phase 4 live lifecycle already PASS. P5-T8 did not re-execute live stop/start/restart (no local launcher password); that is an environment gap, not a product regression. |
 | 11 | No excluded platform features have slipped into scope | PASS | No tray, notifications, full-text search, Flatpak/Snap/AppImage, branching, cloud sync, RAG, telemetry, or other-OS packaging in product code |
 
@@ -111,7 +111,7 @@ No new ADR for Phase 5. Existing decisions still apply:
 
 ## Release Readiness
 
-The repository state constitutes a **usable first PikaTalk release** (version **1.0.0**) for a local openSUSE Tumbleweed + Plasma 6 user with PicoClaw installed: projects/chats persist, title filter and shortcuts work, empty/error states are readable, long chats reload, the app installs as a normal Plasma application, and documentation matches the tree.
+The repository state constitutes a **usable first PikaTalk release** (version **0.1.0**) for a local openSUSE Tumbleweed + Plasma 6 user with PicoClaw installed: projects/chats persist, title filter and shortcuts work, empty/error states are readable, long chats reload, the app installs as a normal Plasma application, and documentation matches the tree.
 
 P5-T8’s live lifecycle item was not repeated here; core Phase 4 lifecycle remains evidenced by that phase’s live PASS plus current fake-launcher tests and live chat.
 

@@ -112,8 +112,8 @@ PikaTalk has a defined version available at runtime and documented for release u
 
 Recorded 2026-08-15.
 
-* **Version chosen:** `1.0.0` (first usable PikaTalk release)
-* **Source of truth:** `project(pikatalk VERSION 1.0.0 …)` in root `CMakeLists.txt`. CMake passes `${PROJECT_VERSION}` as `PIKATALK_VERSION` into the app and version test.
+* **Version chosen:** `0.1.0` (early first-release numbering; corrected from `1.0.0` as too early)
+* **Source of truth:** `project(pikatalk VERSION 0.1.0 …)` in root `CMakeLists.txt`. CMake passes `${PROJECT_VERSION}` as `PIKATALK_VERSION` into the app and version test.
 * **Runtime exposure:** `configureApplicationIdentity()` calls `QCoreApplication::setApplicationVersion(PIKATALK_VERSION)` from `main.cpp`. QML reads `Qt.application.version`.
 * **UI location:** Help → About PikaTalk (`Kirigami.AboutPage` in `src/AboutPikaTalk.qml`). Window title is unchanged.
 
@@ -726,13 +726,13 @@ Remove stale Phase 0–4 language that incorrectly describes current behavior.
 
 Recorded 2026-08-15.
 
-* **README sections updated:** rewrite of `README.md` for a first-time openSUSE/Plasma user: what PikaTalk is, v1 capabilities (projects create/rename/delete; chats create/rename/archive/delete — archive is chats only), what it is not (explicitly no tray / notifications / full-text search), supported platform, PicoClaw requirement (ports **18790** chat / **18800** launcher), build dependencies, build, local install (`cmake --install` to `$HOME/.local`), first run (start PicoClaw Launcher / `picoclaw-launcher`, set `launcherPassword`, then PikaTalk Start; `picoclaw gateway` only as chat-only if the gateway is already up), XDG data/config/cache, version **1.0.0**, known limitations. Sidebar filter described as independent name/title match, not AND. Developer/architecture history and ADRs moved to links under `docs/` / `decisions/` / `docs/handoffs/`.
+* **README sections updated:** rewrite of `README.md` for a first-time openSUSE/Plasma user: what PikaTalk is, v1 capabilities (projects create/rename/delete; chats create/rename/archive/delete — archive is chats only), what it is not (explicitly no tray / notifications / full-text search), supported platform, PicoClaw requirement (ports **18790** chat / **18800** launcher), build dependencies, build, local install (`cmake --install` to `$HOME/.local`), first run (start PicoClaw Launcher / `picoclaw-launcher`, set `launcherPassword`, then PikaTalk Start; `picoclaw gateway` only as chat-only if the gateway is already up), XDG data/config/cache, version **0.1.0**, known limitations. Sidebar filter described as independent name/title match, not AND. Developer/architecture history and ADRs moved to links under `docs/` / `decisions/` / `docs/handoffs/`.
 * **docs updated:**
   * `docs/development.md` — version source of truth, v1 filter/shortcuts/no-tray notes, user README pointer; **launcher hygiene on 18800 kept here**; dropped “Phase 2–3/4” wording on current settings.
   * `docs/local-storage.md` — section titles no longer freeze the product at Phase 1/2/3; launcher keys described as current behavior.
   * `docs/pikaclaw-api.md` — title and lifecycle section describe current gateway/launcher split; temp-launcher warning retained.
 * **Commands verified against the repo:**
-  * `project(pikatalk VERSION 1.0.0)` in root `CMakeLists.txt`; About uses `Qt.application.version`.
+  * `project(pikatalk VERSION 0.1.0)` in root `CMakeLists.txt`; About uses `Qt.application.version`.
   * Executable target/binary `pikatalk` (`src/CMakeLists.txt` `add_executable` / `install(TARGETS)`; `./build/bin/pikatalk` exists).
   * `cmake -B build -G Ninja --install-prefix "$HOME/.local"` is valid CMake 4.4.2 (`--install-prefix` → `CMAKE_INSTALL_PREFIX`).
   * Install artifacts match T6: `$HOME/.local/bin/pikatalk`, `…/applications/org.radilabs.pikatalk.desktop`, `…/metainfo/org.radilabs.pikatalk.metainfo.xml`, `…/icons/hicolor/scalable/apps/org.radilabs.pikatalk.svg`.

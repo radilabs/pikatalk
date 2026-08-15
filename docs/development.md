@@ -4,7 +4,7 @@ Target environment: openSUSE Tumbleweed + KDE Plasma 6.
 
 PikaTalk is a Qt 6 / Kirigami desktop application. This document is the local build, run, and debug cycle. First-time **user** install and v1 capabilities live in the repository `README.md`.
 
-Application version is **1.0.0**, defined only in the root `CMakeLists.txt` (`project(pikatalk VERSION 1.0.0 …)`). Runtime uses `QCoreApplication::applicationVersion()` / **Help → About PikaTalk**.
+Application version is **0.1.0**, defined only in the root `CMakeLists.txt` (`project(pikatalk VERSION 0.1.0 …)`). Runtime uses `QCoreApplication::applicationVersion()` / **Help → About PikaTalk**.
 
 ## 1. Install development dependencies
 
