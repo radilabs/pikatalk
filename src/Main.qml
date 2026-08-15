@@ -153,6 +153,29 @@ Kirigami.ApplicationWindow {
                     messageInput.text = app.currentDraft;
                 }
             }
+            function onPendingDeletionChanged() {
+                if (app.hasPendingDeletion) {
+                    deleteConfirmDialog.open();
+                } else if (deleteConfirmDialog.visible) {
+                    deleteConfirmDialog.close();
+                }
+            }
+        }
+
+        Controls.Dialog {
+            id: deleteConfirmDialog
+            objectName: "deleteConfirmDialog"
+            title: app.pendingDeletionTitle
+            standardButtons: Controls.Dialog.Ok | Controls.Dialog.Cancel
+            modal: true
+            anchors.centerIn: parent
+            onAccepted: app.confirmPendingDeletion()
+            onRejected: app.cancelPendingDeletion()
+            Controls.Label {
+                width: Kirigami.Units.gridUnit * 22
+                wrapMode: Text.Wrap
+                text: app.pendingDeletionMessage
+            }
         }
 
         Controls.SplitView {
@@ -219,7 +242,7 @@ Kirigami.ApplicationWindow {
                         Controls.Button {
                             text: i18n("Delete")
                             enabled: app.currentProjectId > 0
-                            onClicked: app.deleteCurrentProject()
+                            onClicked: app.requestDeleteCurrentProject()
                         }
                     }
                     Controls.Dialog {
@@ -300,7 +323,7 @@ Kirigami.ApplicationWindow {
                         Controls.Button {
                             text: i18n("Delete")
                             enabled: app.currentChatId > 0
-                            onClicked: app.deleteCurrentChat()
+                            onClicked: app.requestDeleteCurrentChat()
                         }
                     }
                     Controls.Dialog {

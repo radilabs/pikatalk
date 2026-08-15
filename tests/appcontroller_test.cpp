@@ -16,6 +16,7 @@ private Q_SLOTS:
     void draftsSurviveSwitchAndRestartWithoutCreatingMessages();
     void localWorkflowRestoresState();
     void isolationAcrossProjectsSurvivesRestart();
+    void deleteConfirmationCanCancelOrConfirm();
 };
 
 void AppControllerTest::createRenameSwitchDeleteAndReopen()
@@ -394,6 +395,64 @@ void AppControllerTest::isolationAcrossProjectsSurvivesRestart()
     QCOMPARE(controller.chats().size(), 0);
     QCOMPARE(controller.currentWorkspace(), QStringLiteral("/tmp/mutate-updated"));
     QCOMPARE(controller.currentModel(), QStringLiteral("mutate-model-updated"));
+}
+
+void AppControllerTest::deleteConfirmationCanCancelOrConfirm()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+
+    QVERIFY(controller.createProject(QStringLiteral("Keep")));
+    QVERIFY(controller.createChat(QStringLiteral("Keep chat")));
+    QVERIFY(controller.addUserMessage(QStringLiteral("keep history")));
+    QVERIFY(controller.createProject(QStringLiteral("Remove")));
+    QVERIFY(controller.createChat(QStringLiteral("Remove chat")));
+    QVERIFY(controller.addUserMessage(QStringLiteral("remove history")));
+    QCOMPARE(controller.projects().size(), 2);
+    QCOMPARE(controller.chats().size(), 1);
+
+    QVERIFY(controller.requestDeleteCurrentChat());
+    QVERIFY(controller.hasPendingDeletion());
+    QCOMPARE(controller.pendingDeletionKind(), QStringLiteral("chat"));
+    QVERIFY(controller.pendingDeletionMessage().contains(QStringLiteral("Remove chat")));
+    controller.cancelPendingDeletion();
+    QVERIFY(!controller.hasPendingDeletion());
+    QCOMPARE(controller.chats().size(), 1);
+    QCOMPARE(controller.currentChatTitle(), QStringLiteral("Remove chat"));
+    QCOMPARE(controller.messages().size(), 1);
+
+    QVERIFY(controller.requestDeleteCurrentChat());
+    QVERIFY(controller.confirmPendingDeletion());
+    QVERIFY(!controller.hasPendingDeletion());
+    QCOMPARE(controller.chats().size(), 0);
+
+    QVERIFY(controller.createChat(QStringLiteral("Another")));
+    QVERIFY(controller.archiveCurrentChat());
+    QVERIFY(!controller.hasPendingDeletion());
+    QCOMPARE(controller.chats().size(), 0);
+
+    QVERIFY(controller.requestDeleteCurrentProject());
+    QVERIFY(controller.hasPendingDeletion());
+    QCOMPARE(controller.pendingDeletionKind(), QStringLiteral("project"));
+    QVERIFY(controller.pendingDeletionMessage().contains(QStringLiteral("Remove")));
+    QVERIFY(controller.pendingDeletionMessage().contains(QStringLiteral("chats")));
+    QVERIFY(controller.pendingDeletionMessage().contains(QStringLiteral("history")));
+    controller.cancelPendingDeletion();
+    QVERIFY(!controller.hasPendingDeletion());
+    QCOMPARE(controller.projects().size(), 2);
+    QCOMPARE(controller.currentProjectName(), QStringLiteral("Remove"));
+
+    QVERIFY(controller.requestDeleteCurrentProject());
+    QVERIFY(controller.confirmPendingDeletion());
+    QVERIFY(!controller.hasPendingDeletion());
+    QCOMPARE(controller.projects().size(), 1);
+    QCOMPARE(controller.currentProjectName(), QStringLiteral("Keep"));
+    QCOMPARE(controller.chats().size(), 1);
+    QCOMPARE(controller.currentChatTitle(), QStringLiteral("Keep chat"));
+    QCOMPARE(controller.messages().at(0).toMap().value(QStringLiteral("content")).toString(), QStringLiteral("keep history"));
 }
 
 QTEST_GUILESS_MAIN(AppControllerTest)

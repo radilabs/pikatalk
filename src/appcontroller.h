@@ -23,6 +23,10 @@ class AppController : public QObject
     Q_PROPERTY(QString currentProjectModel READ currentProjectModel NOTIFY currentModelChanged)
     Q_PROPERTY(bool currentChatHasModelOverride READ currentChatHasModelOverride NOTIFY currentModelChanged)
     Q_PROPERTY(QString currentDraft READ currentDraft WRITE setCurrentDraft NOTIFY currentDraftChanged)
+    Q_PROPERTY(bool hasPendingDeletion READ hasPendingDeletion NOTIFY pendingDeletionChanged)
+    Q_PROPERTY(QString pendingDeletionKind READ pendingDeletionKind NOTIFY pendingDeletionChanged)
+    Q_PROPERTY(QString pendingDeletionTitle READ pendingDeletionTitle NOTIFY pendingDeletionChanged)
+    Q_PROPERTY(QString pendingDeletionMessage READ pendingDeletionMessage NOTIFY pendingDeletionChanged)
 
 public:
     explicit AppController(QObject *parent = nullptr);
@@ -43,6 +47,10 @@ public:
     QString currentProjectModel() const;
     bool currentChatHasModelOverride() const;
     QString currentDraft() const;
+    bool hasPendingDeletion() const;
+    QString pendingDeletionKind() const;
+    QString pendingDeletionTitle() const;
+    QString pendingDeletionMessage() const;
 
     Q_INVOKABLE bool createProject(const QString &name);
     Q_INVOKABLE bool renameCurrentProject(const QString &name);
@@ -63,6 +71,10 @@ public:
     Q_INVOKABLE bool setCurrentChatModelOverride(const QString &model);
     Q_INVOKABLE bool clearCurrentChatModelOverride();
     Q_INVOKABLE bool setCurrentDraft(const QString &content);
+    Q_INVOKABLE bool requestDeleteCurrentProject();
+    Q_INVOKABLE bool requestDeleteCurrentChat();
+    Q_INVOKABLE void cancelPendingDeletion();
+    Q_INVOKABLE bool confirmPendingDeletion();
 
 Q_SIGNALS:
     void projectsChanged();
@@ -73,6 +85,7 @@ Q_SIGNALS:
     void currentWorkspaceChanged();
     void currentModelChanged();
     void currentDraftChanged();
+    void pendingDeletionChanged();
 
 private:
     void reloadProjects();
@@ -81,6 +94,7 @@ private:
     void reloadWorkspace();
     void reloadDraft();
     bool addMessage(const QString &role, const QString &content);
+    void clearPendingDeletion();
 
     LocalDatabase m_db;
     QVariantList m_projects;
@@ -95,4 +109,7 @@ private:
     QString m_currentProjectModel;
     bool m_currentChatHasModelOverride = false;
     QString m_currentDraft;
+    QString m_pendingDeletionKind;
+    QString m_pendingDeletionTitle;
+    QString m_pendingDeletionMessage;
 };

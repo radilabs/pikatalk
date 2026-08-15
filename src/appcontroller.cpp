@@ -107,6 +107,26 @@ QString AppController::currentDraft() const
     return m_currentDraft;
 }
 
+bool AppController::hasPendingDeletion() const
+{
+    return !m_pendingDeletionKind.isEmpty();
+}
+
+QString AppController::pendingDeletionKind() const
+{
+    return m_pendingDeletionKind;
+}
+
+QString AppController::pendingDeletionTitle() const
+{
+    return m_pendingDeletionTitle;
+}
+
+QString AppController::pendingDeletionMessage() const
+{
+    return m_pendingDeletionMessage;
+}
+
 void AppController::reloadProjects()
 {
     m_projects.clear();
@@ -512,4 +532,59 @@ bool AppController::setCurrentDraft(const QString &content)
     m_currentDraft = content;
     Q_EMIT currentDraftChanged();
     return true;
+}
+
+void AppController::clearPendingDeletion()
+{
+    if (m_pendingDeletionKind.isEmpty()) {
+        return;
+    }
+    m_pendingDeletionKind.clear();
+    m_pendingDeletionTitle.clear();
+    m_pendingDeletionMessage.clear();
+    Q_EMIT pendingDeletionChanged();
+}
+
+bool AppController::requestDeleteCurrentChat()
+{
+    if (m_currentChatId <= 0) {
+        return false;
+    }
+    m_pendingDeletionKind = QStringLiteral("chat");
+    m_pendingDeletionTitle = QStringLiteral("Delete chat");
+    m_pendingDeletionMessage = QStringLiteral("Permanently delete chat “%1”?").arg(currentChatTitle());
+    Q_EMIT pendingDeletionChanged();
+    return true;
+}
+
+bool AppController::requestDeleteCurrentProject()
+{
+    if (m_currentProjectId <= 0) {
+        return false;
+    }
+    m_pendingDeletionKind = QStringLiteral("project");
+    m_pendingDeletionTitle = QStringLiteral("Delete project");
+    m_pendingDeletionMessage = QStringLiteral(
+                                     "Permanently delete project “%1”? Its chats and history will also be deleted.")
+                                     .arg(currentProjectName());
+    Q_EMIT pendingDeletionChanged();
+    return true;
+}
+
+void AppController::cancelPendingDeletion()
+{
+    clearPendingDeletion();
+}
+
+bool AppController::confirmPendingDeletion()
+{
+    const QString kind = m_pendingDeletionKind;
+    clearPendingDeletion();
+    if (kind == QStringLiteral("project")) {
+        return deleteCurrentProject();
+    }
+    if (kind == QStringLiteral("chat")) {
+        return deleteCurrentChat();
+    }
+    return false;
 }

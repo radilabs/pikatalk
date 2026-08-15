@@ -5,12 +5,12 @@
 Meaningful files produced or updated:
 
 * `src/database.h` / `src/database.cpp` — schema version 1 store (`pikatalk.sqlite`)
-* `src/appcontroller.h` / `src/appcontroller.cpp` — project/chat/message/draft/workspace/model UI state
-* `src/Main.qml` — selectable project/chat lists, persisted conversation, context bar, drafts
+* `src/Main.qml` — selectable project/chat lists, persisted conversation, context bar, drafts, delete confirmation
+* `src/appcontroller.h` / `src/appcontroller.cpp` — project/chat/message/draft/workspace/model UI state; pending delete confirmation
 * `src/main.cpp` — opens `pikatalk.sqlite` and exposes `app` to QML
 * `src/CMakeLists.txt` — includes AppController
 * `tests/database_test.cpp` — schema, round-trip, reopen, project isolation, chat/message isolation
-* `tests/appcontroller_test.cpp` — project/chat/message/workspace/model/draft/workflow/isolation tests
+* `tests/appcontroller_test.cpp` — project/chat/message/workspace/model/draft/workflow/isolation/delete-confirmation tests
 * `tests/CMakeLists.txt` — `database_test` and `appcontroller_test`
 * `decisions/0002-local-sqlite-schema.md`
 * `docs/local-storage.md` — Phase 1 database location, schema, inheritance, drafts
@@ -34,8 +34,9 @@ Production database:
 
 * `cmake --build build`
 * `ctest --test-dir build --output-on-failure` — appstreamtest, applicationpaths_test, database_test, appcontroller_test (4/4 passed)
-* Launched `./build/bin/pikatalk`; logged `pikatalk.sqlite`; no QML load failure
+* Launched `./build/bin/pikatalk`; logged `pikatalk.sqlite`; no QML load failure after adding `deleteConfirmDialog`
 * Automated coverage for create/rename/select/delete projects; create/rename/select/archive/delete chats; local user/assistant messages; workspace and model inheritance/overrides; drafts across switch and restart; isolation across projects
+* Permanent deletion confirmation: `appcontroller_test::deleteConfirmationCanCancelOrConfirm` — cancel leaves project/chat/history intact; confirm deletes; project warning includes chats and history; archive remains immediate
 
 ## Results
 
@@ -43,8 +44,8 @@ Phase 1 acceptance criteria from `PHASES.md`:
 
 | # | Criterion | Result | Evidence |
 | --- | --- | --- | --- |
-| 1 | Projects can be created, selected, renamed, and persisted | PASS | `appcontroller_test::createRenameSwitchDeleteAndReopen`; sidebar New/Rename/Delete |
-| 2 | Chats can be created, selected, renamed, archived/deleted, and persisted | PASS | `chatsAreScopedToProjectAndSurviveRestart`; sidebar New/Rename/Archive/Delete |
+| 1 | Projects can be created, selected, renamed, and persisted | PASS | `appcontroller_test::createRenameSwitchDeleteAndReopen`; sidebar New/Rename/Delete with confirmation before permanent delete |
+| 2 | Chats can be created, selected, renamed, archived/deleted, and persisted | PASS | `chatsAreScopedToProjectAndSurviveRestart`; sidebar New/Rename/Archive (immediate)/Delete (confirmed) |
 | 3 | Existing chats are available after restarting PikaTalk | PASS | reopen restores most recently active non-archived chat and its project |
 | 4 | Local messages are persisted correctly | PASS | `messagesAreIsolatedPerChatAndSurviveRestart`; `messages` table `role`/`position` |
 | 5 | Project default workspace is inherited by new chats | PASS | `workspaceDefaultsAndOverridesPersist`; NULL `workspace_override` |
@@ -59,7 +60,7 @@ Phase 1 acceptance criteria from `PHASES.md`:
 ## Known Limitations
 
 * Running from `build/bin/pikatalk` without `cmake --install build` logs `xdg-desktop-portal` warning `App info not found for 'org.radilabs.pikatalk'`. The window still opens.
-* There is no unarchive UI. Archived chats remain in SQLite (`archived = 1`) but are hidden from the default list.
+* Permanent project and chat deletion require confirmation. Cancel does not delete. Confirming a project delete also removes its chats and history. Archive remains immediate.
 * Assistant replies are local only via **Local reply**. Nothing is sent to a model or gateway.
 * Model and workspace values are free-form local strings. They are not validated or discovered.
 * Selected project/chat after restart is the globally most recently active non-archived chat, not a separate session-settings table.

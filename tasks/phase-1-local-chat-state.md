@@ -150,7 +150,7 @@ Working persisted project management.
 
 * operations tested: create two projects, rename one, switch selection, reopen store, delete one, confirm the other remains (`appcontroller_test`, `database_test::projectRenameAndDeleteAreIsolated`)
 * restart result: after closing and reopening the database, both renamed/original names were present
-* deletion behavior: `DELETE FROM projects` with `ON DELETE CASCADE` to chats/messages/drafts. Unrelated projects remain. Recorded in ADR 0002.
+* deletion behavior: `DELETE FROM projects` with `ON DELETE CASCADE` to chats/messages/drafts. Unrelated projects remain. Recorded in ADR 0002. Permanent delete is confirmed first (`requestDeleteCurrentProject` / cancel / confirm); the project dialog states that chats and history are also deleted.
 * failures found/fixed: `QString()` bound as SQL NULL and violated `NOT NULL` on `default_workspace`; create now stores empty strings
 * UI: sidebar project `ListView` with New/Rename/Delete; context bar shows the selected project name. App launched without QML errors.
 
@@ -205,7 +205,7 @@ A working project/chat sidebar backed by persisted local data.
 * list/model mechanism used: `QVariantList` of `{id, title}` from `LocalDatabase::listChatIds` (ordered by `last_active_at DESC`) exposed as `app.chats`; sidebar `ListView` (`chatList`) with `ItemDelegate` selection
 * operations tested: create multiple chats per project, switch projects (filtered lists), rename, archive, delete (`database_test::chatsAreFilteredRenamedArchivedAndDeleted`, `appcontroller_test::chatsAreScopedToProjectAndSurviveRestart`)
 * restart behavior: `openStore` restores the most recently active non-archived chat and its project
-* archive/delete behavior: archive hides from the default list but keeps the row; delete removes the chat (CASCADE to messages/drafts). Unrelated project chats remain.
+* archive/delete behavior: archive is immediate and hides from the default list but keeps the row. Permanent delete asks for confirmation first (`deleteConfirmationCanCancelOrConfirm`); cancel leaves the chat; confirm removes it (CASCADE to messages/drafts). Unrelated project chats remain.
 
 ## Status
 
