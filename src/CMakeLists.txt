@@ -14,6 +14,10 @@ target_sources(pikatalk
     database.h
     appcontroller.cpp
     appcontroller.h
+    pikaclawclient.cpp
+    pikaclawclient.h
+    pikaclawsettings.cpp
+    pikaclawsettings.h
 )
 
 ecm_target_qml_sources(pikatalk
@@ -29,6 +33,7 @@ target_link_libraries(pikatalk
     Qt6::QuickControls2
     Qt6::Widgets
     Qt6::Sql
+    Qt6::Network
     KF6::I18n
     KF6::I18nQml
     KF6::CoreAddons

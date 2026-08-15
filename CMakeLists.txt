@@ -13,6 +13,7 @@ include(FeatureSummary)
 
 find_package(Qt6 REQUIRED COMPONENTS
     Core
+    Network
     Quick
     Gui
     QuickControls2

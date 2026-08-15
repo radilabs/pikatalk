@@ -53,6 +53,8 @@ public:
     bool clearChatModelOverride(qint64 id, QString *error = nullptr);
 
     qint64 addMessage(qint64 chatId, const QString &role, const QString &content, QString *error = nullptr);
+    bool updateMessageContent(qint64 id, const QString &content, QString *error = nullptr);
+    bool deleteMessage(qint64 id, QString *error = nullptr);
     bool readMessage(qint64 id, qint64 *chatId, QString *role, QString *content, qint64 *position, QString *error = nullptr) const;
     QList<qint64> listMessageIds(qint64 chatId, QString *error = nullptr) const;
 

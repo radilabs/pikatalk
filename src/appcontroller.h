@@ -1,8 +1,12 @@
 #pragma once
 
 #include "database.h"
+#include "pikaclawclient.h"
 
+#include <QHash>
+#include <QJsonObject>
 #include <QObject>
+#include <QUrl>
 #include <QVariant>
 #include <QVariantList>
 
@@ -27,9 +31,18 @@ class AppController : public QObject
     Q_PROPERTY(QString pendingDeletionKind READ pendingDeletionKind NOTIFY pendingDeletionChanged)
     Q_PROPERTY(QString pendingDeletionTitle READ pendingDeletionTitle NOTIFY pendingDeletionChanged)
     Q_PROPERTY(QString pendingDeletionMessage READ pendingDeletionMessage NOTIFY pendingDeletionChanged)
+    Q_PROPERTY(QString gatewayState READ gatewayState NOTIFY gatewayStateChanged)
+    Q_PROPERTY(QString gatewayError READ gatewayError NOTIFY gatewayStateChanged)
+    Q_PROPERTY(QVariantList availableModels READ availableModels NOTIFY availableModelsChanged)
+    Q_PROPERTY(bool selectedModelUnavailable READ selectedModelUnavailable NOTIFY availableModelsChanged)
+    Q_PROPERTY(bool isGenerating READ isGenerating NOTIFY chatTurnChanged)
+    Q_PROPERTY(QString streamingAssistantText READ streamingAssistantText NOTIFY chatTurnChanged)
+    Q_PROPERTY(QString requestError READ requestError NOTIFY chatTurnChanged)
+    Q_PROPERTY(bool canRetryOrRegenerate READ canRetryOrRegenerate NOTIFY chatTurnChanged)
 
 public:
     explicit AppController(QObject *parent = nullptr);
+    ~AppController() override;
 
     bool openStore(const QString &filePath, QString *error = nullptr);
 
@@ -51,6 +64,15 @@ public:
     QString pendingDeletionKind() const;
     QString pendingDeletionTitle() const;
     QString pendingDeletionMessage() const;
+    QString gatewayState() const;
+    QString gatewayError() const;
+    QUrl gatewayEndpoint() const;
+    QVariantList availableModels() const;
+    bool selectedModelUnavailable() const;
+    bool isGenerating() const;
+    QString streamingAssistantText() const;
+    QString requestError() const;
+    bool canRetryOrRegenerate() const;
 
     Q_INVOKABLE bool createProject(const QString &name);
     Q_INVOKABLE bool renameCurrentProject(const QString &name);
@@ -75,6 +97,15 @@ public:
     Q_INVOKABLE bool requestDeleteCurrentChat();
     Q_INVOKABLE void cancelPendingDeletion();
     Q_INVOKABLE bool confirmPendingDeletion();
+    Q_INVOKABLE void configureGateway(const QUrl &endpoint, const QString &token);
+    Q_INVOKABLE void loadGatewaySettings(const QString &configDirectory);
+    Q_INVOKABLE void setGatewayAutoReconnect(bool enabled);
+    Q_INVOKABLE void setGatewayReconnectIntervalMs(int milliseconds);
+    Q_INVOKABLE void connectToGateway();
+    Q_INVOKABLE void disconnectFromGateway();
+    Q_INVOKABLE bool sendChatMessage(const QString &content);
+    Q_INVOKABLE bool stopGeneration();
+    Q_INVOKABLE bool retryOrRegenerate();
 
 Q_SIGNALS:
     void projectsChanged();
@@ -86,6 +117,9 @@ Q_SIGNALS:
     void currentModelChanged();
     void currentDraftChanged();
     void pendingDeletionChanged();
+    void gatewayStateChanged();
+    void availableModelsChanged();
+    void chatTurnChanged();
 
 private:
     void reloadProjects();
@@ -93,8 +127,19 @@ private:
     void reloadMessages();
     void reloadWorkspace();
     void reloadDraft();
+    void refreshModelAvailability();
     bool addMessage(const QString &role, const QString &content);
     void clearPendingDeletion();
+    void onGatewayMessage(const QJsonObject &object);
+    void finishTurn();
+    void persistStreamingAssistant();
+    QString picoSessionId(qint64 chatId) const;
+    QUrl sessionAwareEndpoint() const;
+    void syncGatewaySession();
+    void beginGatewayTurn(const QString &userContent);
+    void sendPicoUserContent(const QString &content);
+    void sendSelectedModelSwitch();
+    bool sessionNeedsModelSwitch() const;
 
     LocalDatabase m_db;
     QVariantList m_projects;
@@ -112,4 +157,20 @@ private:
     QString m_pendingDeletionKind;
     QString m_pendingDeletionTitle;
     QString m_pendingDeletionMessage;
+    PicoClawClient m_gateway;
+    QUrl m_baseGatewayEndpoint;
+    QVariantList m_availableModels;
+    QString m_picoConfigPath;
+    bool m_selectedModelUnavailable = false;
+    bool m_isGenerating = false;
+    QString m_streamingAssistantText;
+    QString m_streamingPicoMessageId;
+    QString m_requestError;
+    QString m_lastUserContent;
+    qint64 m_turnChatId = 0;
+    qint64 m_persistedAssistantId = 0;
+    bool m_awaitingRetry = false;
+    bool m_modelSwitchPending = false;
+    QString m_pendingUserContent;
+    QHash<QString, QString> m_sessionAppliedModel;
 };

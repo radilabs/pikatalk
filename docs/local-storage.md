@@ -125,3 +125,17 @@ Effective model:
 New chats are created with NULL overrides, so they inherit. Changing a project default updates inheriting chats. Clearing an override sets the column back to NULL.
 
 Deleting a project cascades to its chats, messages, and drafts.
+
+## Phase 2 gateway configuration
+
+Conversation history stays in `pikatalk.sqlite`. PikaClaw connection settings are **not** stored in SQLite.
+
+File: `$XDG_CONFIG_HOME/Radilabs/PikaTalk/pikatalk.conf`
+
+Keys under `[picoClaw]`:
+
+* `endpoint` — default `ws://127.0.0.1:18790/pico/ws`
+* `token` — Pico channel bearer token. If empty, PikaTalk reads `~/.picoclaw/.security.yml`
+* `configPath` — PicoClaw `config.json` used for `model_list` discovery
+
+See `docs/pikaclaw-api.md` and `decisions/0003-pico-protocol-chat-transport.md`.

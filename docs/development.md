@@ -20,7 +20,8 @@ sudo zypper install \
   kf6-qqc2-desktop-style-devel \
   qt6-base-devel \
   qt6-declarative-devel \
-  qt6-quickcontrols2-devel
+  qt6-quickcontrols2-devel \
+  qt6-network-devel
 ```
 
 `qt6-sql-devel` and the SQLite driver are pulled in by `qt6-base-devel` on Tumbleweed.
@@ -43,7 +44,7 @@ cmake --build build
 
 The executable is `build/bin/pikatalk`.
 
-Automated checks (`applicationpaths_test`, `database_test`, `appcontroller_test`, and `appstreamtest`):
+Automated checks (`applicationpaths_test`, `database_test`, `appcontroller_test`, `pikaclawclient_test`, and `appstreamtest`):
 
 ```bash
 ctest --test-dir build --output-on-failure
@@ -87,6 +88,7 @@ Startup diagnostics and Qt/QML messages are written to stderr, including:
 
 * data / config / cache directories
 * SQLite database path
+* configured PikaClaw WebSocket endpoint
 * directory or database errors
 * QML load failures
 
@@ -95,6 +97,7 @@ Example:
 ```text
 PikaTalk data directory: /home/naorw/.local/share/Radilabs/PikaTalk
 PikaTalk sqlite database: /home/naorw/.local/share/Radilabs/PikaTalk/pikatalk.sqlite
+PikaTalk PikaClaw endpoint: ws://127.0.0.1:18790/pico/ws
 ```
 
 Capture them with:
@@ -122,3 +125,20 @@ Useful environment variables:
 * `QML_IMPORT_TRACE=1` if a QML module fails to load
 
 Local data locations are documented in `docs/local-storage.md`.
+
+The PikaClaw/PicoClaw chat protocol used by Phase 2 is documented in `docs/pikaclaw-api.md`. Gateway connection settings live in `$XDG_CONFIG_HOME/Radilabs/PikaTalk/pikatalk.conf`:
+
+```ini
+[picoClaw]
+endpoint=ws://127.0.0.1:18790/pico/ws
+token=
+configPath=/home/naorw/.picoclaw/config.json
+```
+
+Leave `token` empty to read the same-user PicoClaw pico channel token from `~/.picoclaw/.security.yml`. Do not commit that file or the token.
+
+A real local gateway send (requires `picoclaw gateway` already running):
+
+```bash
+PIKATALK_LIVE_GATEWAY=1 ./build/bin/appcontroller_test liveGatewaySendIfEnabled
+```

@@ -1,7 +1,47 @@
 #include "appcontroller.h"
+#include "fake_pico_server.h"
+#include "pikaclawsettings.h"
 
+#include <QDir>
+#include <QFile>
+#include <QJsonObject>
 #include <QTemporaryDir>
+#include <QUrl>
 #include <QtTest>
+
+namespace {
+
+QJsonObject picoAssistant(const QString &content, const QString &id)
+{
+    return QJsonObject{
+        {QStringLiteral("type"), QStringLiteral("message.create")},
+        {QStringLiteral("payload"),
+         QJsonObject{{QStringLiteral("content"), content}, {QStringLiteral("message_id"), id}}}};
+}
+
+void confirmPendingModelSwitch(FakePicoServer &server)
+{
+    QTRY_VERIFY(server.clientMessages().size() >= 1);
+    const QString content = server.clientMessages()
+                                .last()
+                                .value(QStringLiteral("payload"))
+                                .toObject()
+                                .value(QStringLiteral("content"))
+                                .toString();
+    QVERIFY(content.startsWith(QStringLiteral("/switch model to ")));
+    const int before = server.clientMessages().size();
+    server.sendJson(picoAssistant(QStringLiteral("Switched."), QStringLiteral("switch-1")));
+    QTRY_COMPARE(server.clientMessages().size(), before + 1);
+    QVERIFY(!server.clientMessages()
+                 .last()
+                 .value(QStringLiteral("payload"))
+                 .toObject()
+                 .value(QStringLiteral("content"))
+                 .toString()
+                 .startsWith(QStringLiteral("/switch model to ")));
+}
+
+}
 
 class AppControllerTest : public QObject
 {
@@ -17,6 +57,17 @@ private Q_SLOTS:
     void localWorkflowRestoresState();
     void isolationAcrossProjectsSurvivesRestart();
     void deleteConfirmationCanCancelOrConfirm();
+    void gatewayFailureDoesNotAlterLocalState();
+    void gatewayReconnectsWithoutAlteringLocalState();
+    void loadGatewaySettingsConnectsUsingConfigFile();
+    void discoveredModelsDoNotRewriteLocalSelection();
+    void sendChatRequestUsesModelWorkspaceAndPersistsUser();
+    void sendSkipsSwitchWhenSelectedMatchesGatewayDefault();
+    void streamsAndPersistsFinalAssistant();
+    void stopGenerationEndsTurnAndPreservesHistory();
+    void retryRegeneratesLatestAssistant();
+    void gatewayErrorPreservesDraftAndHistory();
+    void liveGatewaySendIfEnabled();
 };
 
 void AppControllerTest::createRenameSwitchDeleteAndReopen()
@@ -453,6 +504,406 @@ void AppControllerTest::deleteConfirmationCanCancelOrConfirm()
     QCOMPARE(controller.chats().size(), 1);
     QCOMPARE(controller.currentChatTitle(), QStringLiteral("Keep chat"));
     QCOMPARE(controller.messages().at(0).toMap().value(QStringLiteral("content")).toString(), QStringLiteral("keep history"));
+}
+
+void AppControllerTest::gatewayFailureDoesNotAlterLocalState()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    QVERIFY(controller.createProject(QStringLiteral("Keep")));
+    QVERIFY(controller.createChat(QStringLiteral("Keep chat")));
+    QVERIFY(controller.addUserMessage(QStringLiteral("hello")));
+    QVERIFY(controller.setCurrentDraft(QStringLiteral("unsent draft")));
+    QVERIFY(controller.setCurrentProjectModel(QStringLiteral("step-3.7-flash")));
+    QVERIFY(controller.setCurrentProjectWorkspace(QStringLiteral("/tmp/workspace")));
+
+    controller.configureGateway(QUrl(QStringLiteral("ws://127.0.0.1:1/pico/ws")), QStringLiteral("test-token"));
+    controller.setGatewayAutoReconnect(false);
+    controller.connectToGateway();
+    QTRY_COMPARE(controller.gatewayState(), QStringLiteral("error"));
+    QVERIFY(!controller.gatewayError().isEmpty());
+
+    QCOMPARE(controller.currentProjectName(), QStringLiteral("Keep"));
+    QCOMPARE(controller.currentChatTitle(), QStringLiteral("Keep chat"));
+    QCOMPARE(controller.messages().size(), 1);
+    QCOMPARE(controller.currentDraft(), QStringLiteral("unsent draft"));
+    QCOMPARE(controller.currentModel(), QStringLiteral("step-3.7-flash"));
+    QCOMPARE(controller.currentWorkspace(), QStringLiteral("/tmp/workspace"));
+}
+
+void AppControllerTest::gatewayReconnectsWithoutAlteringLocalState()
+{
+    FakePicoServer server;
+    server.setRequiredToken(QStringLiteral("test-token"));
+    QVERIFY(server.listen());
+    const quint16 port = server.port();
+
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    QVERIFY(controller.createProject(QStringLiteral("Keep")));
+    QVERIFY(controller.createChat(QStringLiteral("Keep chat")));
+    QVERIFY(controller.setCurrentDraft(QStringLiteral("still here")));
+
+    controller.configureGateway(server.wsUrl(), QStringLiteral("test-token"));
+    controller.setGatewayAutoReconnect(true);
+    controller.setGatewayReconnectIntervalMs(100);
+    controller.connectToGateway();
+    QTRY_COMPARE(controller.gatewayState(), QStringLiteral("connected"));
+
+    server.stopListening();
+    QTRY_VERIFY(controller.gatewayState() != QStringLiteral("connected"));
+    QCOMPARE(controller.currentDraft(), QStringLiteral("still here"));
+
+    server.setPreferredPort(port);
+    QVERIFY(server.listen());
+    QTRY_COMPARE(controller.gatewayState(), QStringLiteral("connected"));
+    QCOMPARE(controller.currentProjectName(), QStringLiteral("Keep"));
+    QCOMPARE(controller.currentDraft(), QStringLiteral("still here"));
+}
+
+void AppControllerTest::loadGatewaySettingsConnectsUsingConfigFile()
+{
+    FakePicoServer server;
+    server.setRequiredToken(QStringLiteral("from-config"));
+    QVERIFY(server.listen());
+
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    QFile file(QDir(tmp.path()).filePath(QStringLiteral("pikatalk.conf")));
+    QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+    file.write(QStringLiteral("[picoClaw]\nendpoint=%1\ntoken=from-config\n")
+                   .arg(server.wsUrl().toString())
+                   .toUtf8());
+    file.close();
+
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    QVERIFY(controller.createProject(QStringLiteral("Keep")));
+    controller.setGatewayAutoReconnect(false);
+    controller.loadGatewaySettings(tmp.path());
+    QCOMPARE(controller.gatewayEndpoint(), server.wsUrl());
+    controller.connectToGateway();
+    QTRY_COMPARE(controller.gatewayState(), QStringLiteral("connected"));
+    QCOMPARE(controller.currentProjectName(), QStringLiteral("Keep"));
+}
+
+void AppControllerTest::discoveredModelsDoNotRewriteLocalSelection()
+{
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    const QString picoConfig = tmp.filePath(QStringLiteral("config.json"));
+    QFile pico(picoConfig);
+    QVERIFY(pico.open(QIODevice::WriteOnly | QIODevice::Text));
+    pico.write(R"({"model_list":[{"model_name":"step-3.7-flash"},{"model_name":"glm-4.7"}]})");
+    pico.close();
+
+    QFile conf(QDir(tmp.path()).filePath(QStringLiteral("pikatalk.conf")));
+    QVERIFY(conf.open(QIODevice::WriteOnly | QIODevice::Text));
+    conf.write(QStringLiteral("[picoClaw]\nconfigPath=%1\ntoken=x\n").arg(picoConfig).toUtf8());
+    conf.close();
+
+    qint64 chatId = 0;
+    {
+        AppController controller;
+        QString error;
+        QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+        QVERIFY(controller.createProject(QStringLiteral("Alpha")));
+        QVERIFY(controller.setCurrentProjectModel(QStringLiteral("step-3.7-flash")));
+        QVERIFY(controller.createChat(QStringLiteral("Inherited")));
+        QCOMPARE(controller.currentModel(), QStringLiteral("step-3.7-flash"));
+        QVERIFY(!controller.currentChatHasModelOverride());
+        QVERIFY(controller.createChat(QStringLiteral("Override")));
+        QVERIFY(controller.setCurrentChatModelOverride(QStringLiteral("missing-model")));
+        QCOMPARE(controller.currentModel(), QStringLiteral("missing-model"));
+        chatId = controller.currentChatId();
+        controller.loadGatewaySettings(tmp.path());
+        QCOMPARE(controller.availableModels().size(), 2);
+        QVERIFY(controller.selectedModelUnavailable());
+        QCOMPARE(controller.currentModel(), QStringLiteral("missing-model"));
+    }
+
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    controller.loadGatewaySettings(tmp.path());
+    controller.selectChat(chatId);
+    QCOMPARE(controller.currentModel(), QStringLiteral("missing-model"));
+    QVERIFY(controller.selectedModelUnavailable());
+    QVERIFY(controller.currentChatHasModelOverride());
+}
+
+void AppControllerTest::sendChatRequestUsesModelWorkspaceAndPersistsUser()
+{
+    FakePicoServer server;
+    server.setRequiredToken(QStringLiteral("test-token"));
+    QVERIFY(server.listen());
+
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    QVERIFY(controller.createProject(QStringLiteral("Alpha")));
+    QVERIFY(controller.setCurrentProjectModel(QStringLiteral("step-3.7-flash")));
+    QVERIFY(controller.setCurrentProjectWorkspace(QStringLiteral("/tmp/pikatalk-ws")));
+    QVERIFY(controller.createChat(QStringLiteral("Chat")));
+    controller.configureGateway(server.wsUrl(), QStringLiteral("test-token"));
+    controller.setGatewayAutoReconnect(false);
+    controller.connectToGateway();
+    QTRY_COMPARE(controller.gatewayState(), QStringLiteral("connected"));
+
+    QVERIFY(controller.sendChatMessage(QStringLiteral("hello gateway")));
+    confirmPendingModelSwitch(server);
+    QTRY_COMPARE(server.clientMessages().size(), 2);
+    const QJsonObject switchMsg = server.clientMessages().at(0);
+    QCOMPARE(switchMsg.value(QStringLiteral("payload")).toObject().value(QStringLiteral("content")).toString(),
+             QStringLiteral("/switch model to step-3.7-flash"));
+    const QJsonObject userMsg = server.clientMessages().at(1);
+    QCOMPARE(userMsg.value(QStringLiteral("type")).toString(), QStringLiteral("message.send"));
+    QCOMPARE(userMsg.value(QStringLiteral("payload")).toObject().value(QStringLiteral("content")).toString(),
+             QStringLiteral("hello gateway"));
+    QCOMPARE(userMsg.value(QStringLiteral("payload")).toObject().value(QStringLiteral("model_name")).toString(),
+             QStringLiteral("step-3.7-flash"));
+    QCOMPARE(userMsg.value(QStringLiteral("payload")).toObject().value(QStringLiteral("workspace")).toString(),
+             QStringLiteral("/tmp/pikatalk-ws"));
+    QVERIFY(userMsg.value(QStringLiteral("session_id")).toString().contains(QString::number(controller.currentChatId())));
+    QCOMPARE(controller.messages().size(), 1);
+    QCOMPARE(controller.messages().at(0).toMap().value(QStringLiteral("role")).toString(), QStringLiteral("user"));
+    QCOMPARE(controller.messages().at(0).toMap().value(QStringLiteral("content")).toString(), QStringLiteral("hello gateway"));
+    QCOMPARE(controller.currentDraft(), QString());
+}
+
+void AppControllerTest::sendSkipsSwitchWhenSelectedMatchesGatewayDefault()
+{
+    FakePicoServer server;
+    server.setRequiredToken(QStringLiteral("test-token"));
+    QVERIFY(server.listen());
+
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    const QString picoConfig = tmp.filePath(QStringLiteral("config.json"));
+    QFile pico(picoConfig);
+    QVERIFY(pico.open(QIODevice::WriteOnly | QIODevice::Text));
+    pico.write(R"({"agents":{"defaults":{"model_name":"step-3.7-flash"}},"model_list":[{"model_name":"step-3.7-flash"}]})");
+    pico.close();
+    QFile conf(QDir(tmp.path()).filePath(QStringLiteral("pikatalk.conf")));
+    QVERIFY(conf.open(QIODevice::WriteOnly | QIODevice::Text));
+    conf.write(QStringLiteral("[picoClaw]\nendpoint=%1\ntoken=test-token\nconfigPath=%2\n")
+                   .arg(server.wsUrl().toString(), picoConfig)
+                   .toUtf8());
+    conf.close();
+
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    QVERIFY(controller.createProject(QStringLiteral("Alpha")));
+    QVERIFY(controller.setCurrentProjectModel(QStringLiteral("step-3.7-flash")));
+    QVERIFY(controller.createChat(QStringLiteral("Chat")));
+    controller.loadGatewaySettings(tmp.path());
+    controller.setGatewayAutoReconnect(false);
+    controller.connectToGateway();
+    QTRY_COMPARE(controller.gatewayState(), QStringLiteral("connected"));
+    QVERIFY(controller.sendChatMessage(QStringLiteral("hello default")));
+    QTRY_COMPARE(server.clientMessages().size(), 1);
+    QCOMPARE(server.clientMessages().at(0).value(QStringLiteral("payload")).toObject().value(QStringLiteral("content")).toString(),
+             QStringLiteral("hello default"));
+}
+
+void AppControllerTest::streamsAndPersistsFinalAssistant()
+{
+    FakePicoServer server;
+    server.setRequiredToken(QStringLiteral("test-token"));
+    QVERIFY(server.listen());
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    qint64 chatId = 0;
+    {
+        AppController controller;
+        QString error;
+        QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+        QVERIFY(controller.createProject(QStringLiteral("Alpha")));
+        QVERIFY(controller.setCurrentProjectModel(QStringLiteral("step-3.7-flash")));
+        QVERIFY(controller.createChat(QStringLiteral("Chat")));
+        chatId = controller.currentChatId();
+        controller.configureGateway(server.wsUrl(), QStringLiteral("test-token"));
+        controller.setGatewayAutoReconnect(false);
+        controller.connectToGateway();
+        QTRY_COMPARE(controller.gatewayState(), QStringLiteral("connected"));
+        QVERIFY(controller.sendChatMessage(QStringLiteral("hello")));
+        QVERIFY(controller.isGenerating());
+        confirmPendingModelSwitch(server);
+        server.sendJson(QJsonObject{{QStringLiteral("type"), QStringLiteral("typing.start")}});
+        server.sendJson(QJsonObject{
+            {QStringLiteral("type"), QStringLiteral("message.create")},
+            {QStringLiteral("payload"),
+             QJsonObject{{QStringLiteral("kind"), QStringLiteral("thought")},
+                         {QStringLiteral("content"), QStringLiteral("thinking")},
+                         {QStringLiteral("message_id"), QStringLiteral("t1")}}}});
+        server.sendJson(QJsonObject{
+            {QStringLiteral("type"), QStringLiteral("message.update")},
+            {QStringLiteral("payload"),
+             QJsonObject{{QStringLiteral("content"), QStringLiteral("Hel")},
+                         {QStringLiteral("message_id"), QStringLiteral("a1")}}}});
+        QTRY_COMPARE(controller.streamingAssistantText(), QStringLiteral("Hel"));
+        server.sendJson(QJsonObject{
+            {QStringLiteral("type"), QStringLiteral("message.update")},
+            {QStringLiteral("payload"),
+             QJsonObject{{QStringLiteral("content"), QStringLiteral("Hello world")},
+                         {QStringLiteral("message_id"), QStringLiteral("a1")}}}});
+        QTRY_COMPARE(controller.messages().size(), 2);
+        QTRY_COMPARE(controller.messages().at(1).toMap().value(QStringLiteral("content")).toString(),
+                     QStringLiteral("Hello world"));
+        QVERIFY(!controller.isGenerating());
+        QVERIFY(controller.createChat(QStringLiteral("Other")));
+        QCOMPARE(controller.messages().size(), 0);
+        controller.selectChat(chatId);
+        QCOMPARE(controller.messages().size(), 2);
+        QCOMPARE(controller.messages().at(1).toMap().value(QStringLiteral("content")).toString(), QStringLiteral("Hello world"));
+    }
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    controller.selectChat(chatId);
+    QCOMPARE(controller.messages().size(), 2);
+    QCOMPARE(controller.messages().at(1).toMap().value(QStringLiteral("content")).toString(), QStringLiteral("Hello world"));
+}
+
+void AppControllerTest::stopGenerationEndsTurnAndPreservesHistory()
+{
+    FakePicoServer server;
+    server.setRequiredToken(QStringLiteral("test-token"));
+    QVERIFY(server.listen());
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    QVERIFY(controller.createProject(QStringLiteral("Alpha")));
+    QVERIFY(controller.createChat(QStringLiteral("Chat")));
+    const QString firstHistory = QStringLiteral("keep me");
+    QVERIFY(controller.addUserMessage(firstHistory));
+    controller.configureGateway(server.wsUrl(), QStringLiteral("test-token"));
+    controller.setGatewayAutoReconnect(false);
+    controller.connectToGateway();
+    QTRY_COMPARE(controller.gatewayState(), QStringLiteral("connected"));
+    QVERIFY(controller.sendChatMessage(QStringLiteral("long job")));
+    QVERIFY(controller.isGenerating());
+    QVERIFY(controller.stopGeneration());
+    QVERIFY(!controller.isGenerating());
+    QTRY_VERIFY([&server]() {
+        for (const QJsonObject &msg : server.clientMessages()) {
+            if (msg.value(QStringLiteral("payload")).toObject().value(QStringLiteral("content")).toString()
+                == QStringLiteral("/stop")) {
+                return true;
+            }
+        }
+        return false;
+    }());
+    QCOMPARE(controller.messages().at(0).toMap().value(QStringLiteral("content")).toString(), firstHistory);
+    QVERIFY(controller.sendChatMessage(QStringLiteral("after stop")));
+    QCOMPARE(controller.messages().last().toMap().value(QStringLiteral("content")).toString(), QStringLiteral("after stop"));
+}
+
+void AppControllerTest::retryRegeneratesLatestAssistant()
+{
+    FakePicoServer server;
+    server.setRequiredToken(QStringLiteral("test-token"));
+    QVERIFY(server.listen());
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    QVERIFY(controller.createProject(QStringLiteral("Alpha")));
+    QVERIFY(controller.setCurrentProjectModel(QStringLiteral("step-3.7-flash")));
+    QVERIFY(controller.createChat(QStringLiteral("Chat")));
+    controller.configureGateway(server.wsUrl(), QStringLiteral("test-token"));
+    controller.setGatewayAutoReconnect(false);
+    controller.connectToGateway();
+    QTRY_COMPARE(controller.gatewayState(), QStringLiteral("connected"));
+    QVERIFY(controller.sendChatMessage(QStringLiteral("hello")));
+    confirmPendingModelSwitch(server);
+    server.sendJson(picoAssistant(QStringLiteral("first"), QStringLiteral("a1")));
+    QTRY_COMPARE(controller.messages().size(), 2);
+    QVERIFY(controller.retryOrRegenerate());
+    QTRY_COMPARE(controller.messages().size(), 1);
+    QCOMPARE(controller.messages().at(0).toMap().value(QStringLiteral("role")).toString(), QStringLiteral("user"));
+    server.sendJson(QJsonObject{
+        {QStringLiteral("type"), QStringLiteral("message.create")},
+        {QStringLiteral("payload"),
+         QJsonObject{{QStringLiteral("content"), QStringLiteral("second")},
+                     {QStringLiteral("message_id"), QStringLiteral("a2")}}}});
+    QTRY_COMPARE(controller.messages().size(), 2);
+    QCOMPARE(controller.messages().at(1).toMap().value(QStringLiteral("content")).toString(), QStringLiteral("second"));
+}
+
+void AppControllerTest::gatewayErrorPreservesDraftAndHistory()
+{
+    FakePicoServer server;
+    server.setRequiredToken(QStringLiteral("test-token"));
+    QVERIFY(server.listen());
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    QVERIFY(controller.createProject(QStringLiteral("Alpha")));
+    QVERIFY(controller.createChat(QStringLiteral("Chat")));
+    QVERIFY(controller.addUserMessage(QStringLiteral("history")));
+    QVERIFY(controller.setCurrentDraft(QStringLiteral("draft text")));
+    controller.configureGateway(QUrl(QStringLiteral("ws://127.0.0.1:1/pico/ws")), QStringLiteral("test-token"));
+    controller.setGatewayAutoReconnect(false);
+    controller.connectToGateway();
+    QTRY_COMPARE(controller.gatewayState(), QStringLiteral("error"));
+    QVERIFY(!controller.sendChatMessage(QStringLiteral("draft text")));
+    QVERIFY(!controller.requestError().isEmpty());
+    QCOMPARE(controller.currentDraft(), QStringLiteral("draft text"));
+    QCOMPARE(controller.messages().size(), 1);
+
+    controller.configureGateway(server.wsUrl(), QStringLiteral("test-token"));
+    controller.connectToGateway();
+    QTRY_COMPARE(controller.gatewayState(), QStringLiteral("connected"));
+    QVERIFY(controller.sendChatMessage(QStringLiteral("draft text")));
+    QCOMPARE(controller.currentDraft(), QString());
+    QCOMPARE(controller.messages().size(), 2);
+    server.sendJson(picoAssistant(QStringLiteral("ok"), QStringLiteral("a1")));
+    QTRY_COMPARE(controller.messages().size(), 3);
+    QCOMPARE(controller.currentDraft(), QString());
+}
+
+void AppControllerTest::liveGatewaySendIfEnabled()
+{
+    if (!qEnvironmentVariableIsSet("PIKATALK_LIVE_GATEWAY")) {
+        QSKIP("Set PIKATALK_LIVE_GATEWAY=1 to run a real PicoClaw end-to-end send");
+    }
+    const PicoClawConnectionSettings settings = loadPicoClawConnectionSettings(QDir::tempPath());
+    QVERIFY2(!settings.token.isEmpty(), "Pico channel token is required for live gateway test");
+
+    QTemporaryDir tmp;
+    QVERIFY(tmp.isValid());
+    AppController controller;
+    QString error;
+    QVERIFY2(controller.openStore(LocalDatabase::databaseFilePath(tmp.path()), &error), qUtf8Printable(error));
+    QVERIFY(controller.createProject(QStringLiteral("Live")));
+    QVERIFY(controller.setCurrentProjectModel(QStringLiteral("step-3.7-flash")));
+    QVERIFY(controller.setCurrentProjectWorkspace(QDir::homePath() + QStringLiteral("/.picoclaw/workspace")));
+    QVERIFY(controller.createChat(QStringLiteral("Live chat")));
+    controller.loadGatewaySettings(tmp.path());
+    controller.setGatewayAutoReconnect(false);
+    controller.connectToGateway();
+    QTRY_COMPARE_WITH_TIMEOUT(controller.gatewayState(), QStringLiteral("connected"), 10000);
+    QVERIFY(controller.sendChatMessage(QStringLiteral("Reply with exactly the word LIVEOK and nothing else.")));
+    QTRY_VERIFY_WITH_TIMEOUT(controller.messages().size() == 2, 20000);
+    QCOMPARE(controller.messages().at(0).toMap().value(QStringLiteral("role")).toString(), QStringLiteral("user"));
+    QCOMPARE(controller.messages().at(1).toMap().value(QStringLiteral("role")).toString(), QStringLiteral("assistant"));
+    QVERIFY(controller.messages().at(1).toMap().value(QStringLiteral("content")).toString().contains(QStringLiteral("LIVEOK")));
 }
 
 QTEST_GUILESS_MAIN(AppControllerTest)

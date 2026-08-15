@@ -1,10 +1,34 @@
 #include "appcontroller.h"
+#include "pikaclawsettings.h"
 
 #include <QDebug>
+#include <QJsonObject>
+#include <QUrlQuery>
+#include <QUuid>
 
 AppController::AppController(QObject *parent)
     : QObject(parent)
 {
+    connect(&m_gateway, &PicoClawClient::connectionStateChanged, this, [this]() {
+        Q_EMIT gatewayStateChanged();
+        if (m_gateway.connectionState() != QStringLiteral("connected")) {
+            m_sessionAppliedModel.clear();
+        }
+        if (m_isGenerating && m_gateway.connectionState() != QStringLiteral("connected")) {
+            m_requestError = m_gateway.lastError().isEmpty() ? QStringLiteral("connection lost") : m_gateway.lastError();
+            m_awaitingRetry = true;
+            finishTurn();
+        }
+    });
+    connect(&m_gateway, &PicoClawClient::lastErrorChanged, this, &AppController::gatewayStateChanged);
+    connect(&m_gateway, &PicoClawClient::messageReceived, this, &AppController::onGatewayMessage);
+}
+
+AppController::~AppController()
+{
+    disconnect(&m_gateway, nullptr, this, nullptr);
+    m_gateway.setAutoReconnect(false);
+    m_gateway.disconnectFromGateway();
 }
 
 bool AppController::openStore(const QString &filePath, QString *error)
@@ -127,6 +151,55 @@ QString AppController::pendingDeletionMessage() const
     return m_pendingDeletionMessage;
 }
 
+QString AppController::gatewayState() const
+{
+    return m_gateway.connectionState();
+}
+
+QString AppController::gatewayError() const
+{
+    return m_gateway.lastError();
+}
+
+QUrl AppController::gatewayEndpoint() const
+{
+    return m_gateway.endpoint();
+}
+
+QVariantList AppController::availableModels() const
+{
+    return m_availableModels;
+}
+
+bool AppController::selectedModelUnavailable() const
+{
+    return m_selectedModelUnavailable;
+}
+
+bool AppController::isGenerating() const
+{
+    return m_isGenerating;
+}
+
+QString AppController::streamingAssistantText() const
+{
+    if (m_currentChatId != m_turnChatId) {
+        return {};
+    }
+    return m_streamingAssistantText;
+}
+
+QString AppController::requestError() const
+{
+    return m_requestError;
+}
+
+bool AppController::canRetryOrRegenerate() const
+{
+    return !m_isGenerating && m_currentChatId > 0 && !m_lastUserContent.isEmpty()
+        && m_gateway.connectionState() == QStringLiteral("connected");
+}
+
 void AppController::reloadProjects()
 {
     m_projects.clear();
@@ -215,6 +288,14 @@ void AppController::reloadMessages()
         row.insert(QStringLiteral("position"), QVariant::fromValue(position));
         m_messages.append(row);
     }
+    m_lastUserContent.clear();
+    for (int i = m_messages.size() - 1; i >= 0; --i) {
+        const QVariantMap row = m_messages.at(i).toMap();
+        if (row.value(QStringLiteral("role")).toString() == QStringLiteral("user")) {
+            m_lastUserContent = row.value(QStringLiteral("content")).toString();
+            break;
+        }
+    }
     Q_EMIT messagesChanged();
     reloadWorkspace();
 }
@@ -253,6 +334,7 @@ void AppController::reloadWorkspace()
     }
     Q_EMIT currentWorkspaceChanged();
     Q_EMIT currentModelChanged();
+    refreshModelAvailability();
     reloadDraft();
 }
 
@@ -346,6 +428,7 @@ bool AppController::createChat(const QString &title)
     m_currentChatId = id;
     m_db.touchChat(id, &error);
     reloadChats();
+    syncGatewaySession();
     return true;
 }
 
@@ -403,6 +486,7 @@ void AppController::selectChat(qint64 id)
     QString error;
     m_db.touchChat(id, &error);
     reloadChats();
+    syncGatewaySession();
 }
 
 bool AppController::addUserMessage(const QString &content)
@@ -427,10 +511,10 @@ bool AppController::addMessage(const QString &role, const QString &content)
         return false;
     }
     m_db.touchChat(m_currentChatId, &error);
-    reloadMessages();
     QString draftError;
     m_db.saveDraft(m_currentChatId, QString(), &draftError);
     m_currentDraft.clear();
+    reloadMessages();
     Q_EMIT currentDraftChanged();
     return true;
 }
@@ -587,4 +671,319 @@ bool AppController::confirmPendingDeletion()
         return deleteCurrentChat();
     }
     return false;
+}
+
+void AppController::configureGateway(const QUrl &endpoint, const QString &token)
+{
+    m_baseGatewayEndpoint = endpoint;
+    QUrlQuery query(m_baseGatewayEndpoint);
+    query.removeAllQueryItems(QStringLiteral("session_id"));
+    m_baseGatewayEndpoint.setQuery(query);
+    m_gateway.setToken(token);
+    m_gateway.setEndpoint(sessionAwareEndpoint());
+}
+
+void AppController::loadGatewaySettings(const QString &configDirectory)
+{
+    const PicoClawConnectionSettings settings = loadPicoClawConnectionSettings(configDirectory);
+    configureGateway(settings.endpoint, settings.token);
+    m_picoConfigPath = settings.picoConfigPath;
+    m_availableModels.clear();
+    const QStringList names = loadPicoClawModelNames(m_picoConfigPath);
+    for (const QString &name : names) {
+        m_availableModels.append(name);
+    }
+    Q_EMIT availableModelsChanged();
+    refreshModelAvailability();
+}
+
+void AppController::refreshModelAvailability()
+{
+    bool unavailable = false;
+    if (!m_currentModel.isEmpty() && !m_availableModels.isEmpty()) {
+        unavailable = true;
+        for (const QVariant &item : m_availableModels) {
+            if (item.toString() == m_currentModel) {
+                unavailable = false;
+                break;
+            }
+        }
+    }
+    if (m_selectedModelUnavailable != unavailable) {
+        m_selectedModelUnavailable = unavailable;
+        Q_EMIT availableModelsChanged();
+    }
+}
+
+void AppController::setGatewayAutoReconnect(bool enabled)
+{
+    m_gateway.setAutoReconnect(enabled);
+}
+
+void AppController::setGatewayReconnectIntervalMs(int milliseconds)
+{
+    m_gateway.setReconnectIntervalMs(milliseconds);
+}
+
+void AppController::connectToGateway()
+{
+    syncGatewaySession();
+    m_gateway.connectToGateway();
+}
+
+void AppController::disconnectFromGateway()
+{
+    m_gateway.disconnectFromGateway();
+}
+
+bool AppController::sendChatMessage(const QString &content)
+{
+    const QString trimmed = content.trimmed();
+    if (m_currentChatId <= 0 || trimmed.isEmpty() || m_isGenerating) {
+        return false;
+    }
+    if (m_gateway.connectionState() != QStringLiteral("connected")) {
+        m_requestError = m_gateway.lastError().isEmpty() ? QStringLiteral("gateway unavailable") : m_gateway.lastError();
+        m_awaitingRetry = true;
+        Q_EMIT chatTurnChanged();
+        return false;
+    }
+    if (!addUserMessage(trimmed)) {
+        return false;
+    }
+    beginGatewayTurn(trimmed);
+    return true;
+}
+
+QString AppController::picoSessionId(qint64 chatId) const
+{
+    return QStringLiteral("pikatalk-chat-%1").arg(chatId);
+}
+
+QUrl AppController::sessionAwareEndpoint() const
+{
+    QUrl url = m_baseGatewayEndpoint.isEmpty() ? m_gateway.endpoint() : m_baseGatewayEndpoint;
+    if (m_currentChatId <= 0) {
+        return url;
+    }
+    QUrlQuery query(url);
+    query.removeAllQueryItems(QStringLiteral("session_id"));
+    query.addQueryItem(QStringLiteral("session_id"), picoSessionId(m_currentChatId));
+    url.setQuery(query);
+    return url;
+}
+
+void AppController::syncGatewaySession()
+{
+    const QUrl next = sessionAwareEndpoint();
+    if (next == m_gateway.endpoint()) {
+        return;
+    }
+    m_gateway.setEndpoint(next);
+    if (m_gateway.connectionState() == QStringLiteral("connected")
+        || m_gateway.connectionState() == QStringLiteral("connecting")) {
+        m_gateway.connectToGateway();
+    }
+}
+
+bool AppController::sessionNeedsModelSwitch() const
+{
+    if (m_currentModel.isEmpty()) {
+        return false;
+    }
+    const QString sessionId = picoSessionId(m_turnChatId > 0 ? m_turnChatId : m_currentChatId);
+    const QString applied = m_sessionAppliedModel.value(sessionId);
+    if (applied == m_currentModel) {
+        return false;
+    }
+    if (applied.isEmpty()) {
+        const QString gatewayDefault = loadPicoClawDefaultModelName(m_picoConfigPath);
+        if (!gatewayDefault.isEmpty() && gatewayDefault == m_currentModel) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void AppController::beginGatewayTurn(const QString &userContent)
+{
+    m_lastUserContent = userContent;
+    m_turnChatId = m_currentChatId;
+    m_persistedAssistantId = 0;
+    m_streamingAssistantText.clear();
+    m_streamingPicoMessageId.clear();
+    m_requestError.clear();
+    m_awaitingRetry = false;
+    m_isGenerating = true;
+    Q_EMIT chatTurnChanged();
+    if (sessionNeedsModelSwitch()) {
+        m_modelSwitchPending = true;
+        m_pendingUserContent = userContent;
+        sendSelectedModelSwitch();
+        return;
+    }
+    m_modelSwitchPending = false;
+    m_pendingUserContent.clear();
+    sendPicoUserContent(userContent);
+}
+
+void AppController::sendPicoUserContent(const QString &content)
+{
+    const QString sessionId = picoSessionId(m_turnChatId > 0 ? m_turnChatId : m_currentChatId);
+    QJsonObject payload;
+    payload.insert(QStringLiteral("content"), content);
+    payload.insert(QStringLiteral("model_name"), m_currentModel);
+    payload.insert(QStringLiteral("workspace"), m_currentWorkspace);
+    QJsonObject message;
+    message.insert(QStringLiteral("type"), QStringLiteral("message.send"));
+    message.insert(QStringLiteral("id"), QUuid::createUuid().toString(QUuid::WithoutBraces));
+    message.insert(QStringLiteral("session_id"), sessionId);
+    message.insert(QStringLiteral("payload"), payload);
+    m_gateway.sendJson(message);
+}
+
+void AppController::sendSelectedModelSwitch()
+{
+    if (m_currentModel.isEmpty()
+        || m_gateway.connectionState() != QStringLiteral("connected")) {
+        return;
+    }
+    const qint64 chatId = m_currentChatId > 0 ? m_currentChatId : m_turnChatId;
+    if (chatId <= 0) {
+        return;
+    }
+    QJsonObject payload;
+    payload.insert(QStringLiteral("content"), QStringLiteral("/switch model to %1").arg(m_currentModel));
+    QJsonObject message;
+    message.insert(QStringLiteral("type"), QStringLiteral("message.send"));
+    message.insert(QStringLiteral("id"), QUuid::createUuid().toString(QUuid::WithoutBraces));
+    message.insert(QStringLiteral("session_id"), picoSessionId(chatId));
+    message.insert(QStringLiteral("payload"), payload);
+    m_gateway.sendJson(message);
+}
+
+bool AppController::stopGeneration()
+{
+    if (!m_isGenerating) {
+        return false;
+    }
+    QJsonObject payload;
+    payload.insert(QStringLiteral("content"), QStringLiteral("/stop"));
+    QJsonObject message;
+    message.insert(QStringLiteral("type"), QStringLiteral("message.send"));
+    message.insert(QStringLiteral("id"), QUuid::createUuid().toString(QUuid::WithoutBraces));
+    message.insert(QStringLiteral("session_id"), picoSessionId(m_turnChatId));
+    message.insert(QStringLiteral("payload"), payload);
+    m_gateway.sendJson(message);
+    m_streamingAssistantText.clear();
+    m_streamingPicoMessageId.clear();
+    finishTurn();
+    return true;
+}
+
+bool AppController::retryOrRegenerate()
+{
+    if (!canRetryOrRegenerate()) {
+        return false;
+    }
+    if (!m_messages.isEmpty()) {
+        const QVariantMap last = m_messages.last().toMap();
+        if (last.value(QStringLiteral("role")).toString() == QStringLiteral("assistant")) {
+            const qint64 id = last.value(QStringLiteral("id")).toLongLong();
+            QString error;
+            m_db.deleteMessage(id, &error);
+            reloadMessages();
+        }
+    }
+    beginGatewayTurn(m_lastUserContent);
+    return true;
+}
+
+void AppController::finishTurn()
+{
+    m_isGenerating = false;
+    m_modelSwitchPending = false;
+    m_pendingUserContent.clear();
+    Q_EMIT chatTurnChanged();
+}
+
+void AppController::persistStreamingAssistant()
+{
+    if (m_turnChatId <= 0 || m_streamingAssistantText.isEmpty()) {
+        return;
+    }
+    QString error;
+    if (m_persistedAssistantId > 0) {
+        m_db.updateMessageContent(m_persistedAssistantId, m_streamingAssistantText, &error);
+    } else {
+        m_persistedAssistantId = m_db.addMessage(m_turnChatId, QStringLiteral("assistant"), m_streamingAssistantText, &error);
+        m_db.touchChat(m_turnChatId, &error);
+    }
+    if (m_currentChatId == m_turnChatId) {
+        reloadMessages();
+    }
+}
+
+void AppController::onGatewayMessage(const QJsonObject &object)
+{
+    const QString type = object.value(QStringLiteral("type")).toString();
+    const QJsonObject payload = object.value(QStringLiteral("payload")).toObject();
+    if (type == QStringLiteral("error")) {
+        m_requestError = payload.value(QStringLiteral("message")).toString();
+        if (m_requestError.isEmpty()) {
+            m_requestError = payload.value(QStringLiteral("code")).toString();
+        }
+        if (m_requestError.isEmpty()) {
+            m_requestError = QStringLiteral("gateway error");
+        }
+        m_awaitingRetry = true;
+        m_streamingAssistantText.clear();
+        finishTurn();
+        return;
+    }
+    const QString kind = payload.value(QStringLiteral("kind")).toString();
+    if (kind == QStringLiteral("thought") || kind == QStringLiteral("tool_calls")) {
+        return;
+    }
+    if (type == QStringLiteral("message.create") || type == QStringLiteral("message.update")) {
+        const QString content = payload.value(QStringLiteral("content")).toString();
+        if (m_modelSwitchPending) {
+            if (content.startsWith(QStringLiteral("Task stopped."))) {
+                m_streamingAssistantText.clear();
+                finishTurn();
+                return;
+            }
+            if (content.isEmpty()) {
+                return;
+            }
+            m_sessionAppliedModel.insert(picoSessionId(m_turnChatId), m_currentModel);
+            const QString pending = m_pendingUserContent;
+            m_modelSwitchPending = false;
+            m_pendingUserContent.clear();
+            sendPicoUserContent(pending);
+            return;
+        }
+        if (!m_isGenerating && m_persistedAssistantId <= 0) {
+            return;
+        }
+        if (content.startsWith(QStringLiteral("Task stopped."))) {
+            m_streamingAssistantText.clear();
+            finishTurn();
+            return;
+        }
+        if (content.isEmpty()) {
+            return;
+        }
+        m_streamingPicoMessageId = payload.value(QStringLiteral("message_id")).toString();
+        m_streamingAssistantText = content;
+        persistStreamingAssistant();
+        finishTurn();
+        return;
+    }
+    if (!m_isGenerating) {
+        return;
+    }
+    if (type == QStringLiteral("typing.start")) {
+        Q_EMIT chatTurnChanged();
+    }
 }

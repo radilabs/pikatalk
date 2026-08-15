@@ -2,26 +2,24 @@
 
 PikaTalk is a native Linux desktop client for PikaClaw.
 
-This repository currently contains **Phase 1 — Local Chat State**.
+This repository currently contains **Phase 2 — PikaClaw Chat**.
 
-It is a Qt 6 / Kirigami application that stores projects, chats, messages, workspace/model context, and drafts locally in SQLite. It is not yet connected to PikaClaw.
+It is a Qt 6 / Kirigami application that stores projects, chats, messages, workspace/model context, and drafts locally in SQLite, and sends real conversations through the local PicoClaw (PikaClaw) gateway.
 
 ## Current status
 
-Phase 1 provides:
+Phase 2 provides:
 
 * a native Plasma 6 window
 * selectable project and chat lists
-* persisted conversation history (local user and assistant messages)
+* persisted conversation history owned by PikaTalk
 * project default workspace and model, with per-chat overrides
-* per-chat message drafts
-* an always-visible context area for project, workspace, model, and gateway
-* XDG data, config, and cache paths
-* SQLite database `pikatalk.sqlite` (schema version 1)
+* model discovery from PicoClaw `config.json`
+* real Send / streaming / Stop / Retry-Regenerate through Pico Protocol WebSocket
+* gateway communication state in the context area
+* drafts preserved when the gateway is unavailable
 
-The gateway indicator is still a static Offline placeholder.
-
-* Real PikaClaw communication begins in Phase 2.
+PikaTalk does not start/stop the gateway and does not call model providers directly.
 
 ## Target platform
 
@@ -35,6 +33,7 @@ The gateway indicator is still a static Offline placeholder.
 * Kirigami
 * Qt Quick / QML
 * SQLite via Qt SQL
+* Qt Network (Pico Protocol WebSocket)
 
 ## Build and run
 
@@ -45,6 +44,10 @@ Development dependencies, configure/build/launch commands, and debugging notes a
 Local application paths and the SQLite schema are in:
 
 * [`docs/local-storage.md`](docs/local-storage.md)
+
+PikaClaw/PicoClaw chat API behavior:
+
+* [`docs/pikaclaw-api.md`](docs/pikaclaw-api.md)
 
 From the repository root:
 
@@ -66,8 +69,11 @@ ctest --test-dir build --output-on-failure
 
 * [`docs/development.md`](docs/development.md) — build, run, and debug
 * [`docs/local-storage.md`](docs/local-storage.md) — XDG paths and SQLite schema version 1
+* [`docs/pikaclaw-api.md`](docs/pikaclaw-api.md) — observed PicoClaw chat API
 * [`docs/handoffs/phase-1.md`](docs/handoffs/phase-1.md) — Phase 1 completion evidence
+* [`docs/handoffs/phase-2.md`](docs/handoffs/phase-2.md) — Phase 2 completion evidence
 * [`decisions/0002-local-sqlite-schema.md`](decisions/0002-local-sqlite-schema.md) — schema decisions later phases must respect
+* [`decisions/0003-pico-protocol-chat-transport.md`](decisions/0003-pico-protocol-chat-transport.md) — chat transport decision
 
 ## License
 

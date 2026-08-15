@@ -10,10 +10,11 @@ Current structure:
 tasks/
 ├── README.md
 ├── phase-0-native-foundation.md
-└── phase-1-local-chat-state.md
+├── phase-1-local-chat-state.md
+└── phase-2-pikaclaw-chat.md
 ```
 
-`phase-0-native-foundation.md` is historical execution evidence. Do not reopen Phase 0 work.
+`phase-0-native-foundation.md` and `phase-1-local-chat-state.md` are historical execution evidence. Do not reopen Phase 0 or Phase 1 work.
 
 Future phase task files are created only after the current phase handoff is accepted.
 

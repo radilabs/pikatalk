@@ -636,6 +636,31 @@ qint64 LocalDatabase::addMessage(qint64 chatId, const QString &role, const QStri
     return query.lastInsertId().toLongLong();
 }
 
+bool LocalDatabase::updateMessageContent(qint64 id, const QString &content, QString *error)
+{
+    QSqlQuery query(QSqlDatabase::database(m_connectionName));
+    query.prepare(QStringLiteral("UPDATE messages SET content = ? WHERE id = ?"));
+    query.addBindValue(content);
+    query.addBindValue(id);
+    if (!query.exec()) {
+        setError(error, query.lastError().text());
+        return false;
+    }
+    return query.numRowsAffected() > 0;
+}
+
+bool LocalDatabase::deleteMessage(qint64 id, QString *error)
+{
+    QSqlQuery query(QSqlDatabase::database(m_connectionName));
+    query.prepare(QStringLiteral("DELETE FROM messages WHERE id = ?"));
+    query.addBindValue(id);
+    if (!query.exec()) {
+        setError(error, query.lastError().text());
+        return false;
+    }
+    return query.numRowsAffected() > 0;
+}
+
 bool LocalDatabase::readMessage(qint64 id, qint64 *chatId, QString *role, QString *content, qint64 *position, QString *error) const
 {
     QSqlQuery query(QSqlDatabase::database(m_connectionName));
@@ -687,7 +712,7 @@ bool LocalDatabase::saveDraft(qint64 chatId, const QString &content, QString *er
         "INSERT INTO drafts(chat_id, content, updated_at) VALUES(?, ?, ?) "
         "ON CONFLICT(chat_id) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at"));
     query.addBindValue(chatId);
-    query.addBindValue(content);
+    query.addBindValue(content.isEmpty() ? QStringLiteral("") : content);
     query.addBindValue(nowMs());
     if (!query.exec()) {
         setError(error, query.lastError().text());

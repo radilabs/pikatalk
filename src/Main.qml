@@ -42,13 +42,25 @@ Kirigami.ApplicationWindow {
                     }
                     Controls.Label {
                         objectName: "modelPlaceholder"
-                        text: app.currentModel.length > 0
-                              ? i18n("Model: %1", app.currentModel)
-                              : i18n("Model: None")
+                        text: {
+                            if (app.currentModel.length === 0)
+                                return i18n("Model: None");
+                            if (app.selectedModelUnavailable)
+                                return i18n("Model: %1 (not in gateway list)", app.currentModel);
+                            return i18n("Model: %1", app.currentModel);
+                        }
                     }
                     Controls.Label {
                         objectName: "gatewayPlaceholder"
-                        text: i18n("Gateway: Offline")
+                        text: {
+                            if (app.gatewayState === "connected")
+                                return i18n("Gateway: Connected");
+                            if (app.gatewayState === "connecting")
+                                return i18n("Gateway: Connecting");
+                            if (app.gatewayState === "error")
+                                return i18n("Gateway: Error — %1", app.gatewayError);
+                            return i18n("Gateway: Disconnected");
+                        }
                     }
                 }
 
@@ -83,7 +95,7 @@ Kirigami.ApplicationWindow {
                         text: i18n("Project model")
                         enabled: app.currentProjectId > 0
                         onClicked: {
-                            modelField.text = app.currentProjectModel;
+                            modelField.editText = app.currentProjectModel;
                             modelDialog.mode = "project";
                             modelDialog.open();
                         }
@@ -92,7 +104,7 @@ Kirigami.ApplicationWindow {
                         text: i18n("Chat model")
                         enabled: app.currentChatId > 0
                         onClicked: {
-                            modelField.text = app.currentChatHasModelOverride ? app.currentModel : "";
+                            modelField.editText = app.currentChatHasModelOverride ? app.currentModel : "";
                             modelDialog.mode = "chat";
                             modelDialog.open();
                         }
@@ -134,15 +146,25 @@ Kirigami.ApplicationWindow {
             modal: true
             anchors.centerIn: parent
             onAccepted: {
+                const value = modelField.editText.length > 0 ? modelField.editText : modelField.currentText;
                 if (mode === "project") {
-                    app.setCurrentProjectModel(modelField.text);
+                    app.setCurrentProjectModel(value);
                 } else {
-                    app.setCurrentChatModelOverride(modelField.text);
+                    app.setCurrentChatModelOverride(value);
                 }
             }
-            Controls.TextField {
-                id: modelField
-                width: parent.width
+            ColumnLayout {
+                Controls.ComboBox {
+                    id: modelField
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 22
+                    editable: true
+                    model: app.availableModels
+                }
+                Controls.Label {
+                    visible: app.selectedModelUnavailable
+                    wrapMode: Text.Wrap
+                    text: i18n("The stored model is not in the PikaClaw list. Choose another model.")
+                }
             }
         }
 
@@ -390,6 +412,17 @@ Kirigami.ApplicationWindow {
                     }
                 }
 
+                Controls.Label {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Kirigami.Units.largeSpacing
+                    Layout.rightMargin: Kirigami.Units.largeSpacing
+                    wrapMode: Text.Wrap
+                    visible: app.isGenerating
+                    text: app.streamingAssistantText.length > 0
+                          ? app.streamingAssistantText
+                          : i18n("Generating…")
+                }
+
                 Controls.Pane {
                     id: inputArea
                     objectName: "inputArea"
@@ -419,24 +452,30 @@ Kirigami.ApplicationWindow {
                             Layout.fillWidth: true
                             Controls.Button {
                                 text: i18n("Send")
-                                enabled: app.currentChatId > 0
+                                enabled: app.currentChatId > 0 && !app.isGenerating
                                 onClicked: {
-                                    if (app.addUserMessage(messageInput.text)) {
+                                    if (app.sendChatMessage(messageInput.text)) {
                                         messageInput.text = "";
                                     }
                                 }
                             }
                             Controls.Button {
-                                text: i18n("Local reply")
-                                enabled: app.currentChatId > 0
-                                onClicked: {
-                                    const reply = messageInput.text.length > 0
-                                          ? messageInput.text
-                                          : i18n("Local assistant reply");
-                                    if (app.addAssistantMessage(reply)) {
-                                        messageInput.text = "";
-                                    }
-                                }
+                                text: i18n("Stop")
+                                visible: app.isGenerating
+                                enabled: app.isGenerating
+                                onClicked: app.stopGeneration()
+                            }
+                            Controls.Button {
+                                text: i18n("Retry / Regenerate")
+                                visible: !app.isGenerating
+                                enabled: app.canRetryOrRegenerate
+                                onClicked: app.retryOrRegenerate()
+                            }
+                            Controls.Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.Wrap
+                                visible: app.requestError.length > 0
+                                text: i18n("Error: %1", app.requestError)
                             }
                         }
                     }

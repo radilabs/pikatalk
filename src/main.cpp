@@ -58,6 +58,10 @@ int main(int argc, char *argv[])
         logApplicationPath("PikaTalk sqlite database:", dbPath);
     }
 
+    controller->loadGatewaySettings(paths.config);
+    logApplicationPath("PikaTalk PikaClaw endpoint:", controller->gatewayEndpoint().toString());
+    controller->connectToGateway();
+
     QApplication::setStyle(QStringLiteral("breeze"));
     if (qEnvironmentVariableIsEmpty("QT_QUICK_CONTROLS_STYLE")) {
         QQuickStyle::setStyle(QStringLiteral("org.kde.desktop"));
