@@ -27,6 +27,12 @@ qrc_*.cpp
 pikatalk.conf
 **/pikatalk.conf
 
+# Local agent-sandbox / tooling state and overrides (may reference secrets)
+.poolside/
+.superpowers/
+*.local.yaml
+**/*.local.yaml
+
 # Editor / OS
 *~
 *.swp
