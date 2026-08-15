@@ -112,7 +112,7 @@ PikaTalk has a defined version available at runtime and documented for release u
 
 Recorded 2026-08-15.
 
-* **Version chosen:** `0.1.0` (early first-release numbering; corrected from `1.0.0` as too early)
+* **Version chosen:** `0.1.0`
 * **Source of truth:** `project(pikatalk VERSION 0.1.0 …)` in root `CMakeLists.txt`. CMake passes `${PROJECT_VERSION}` as `PIKATALK_VERSION` into the app and version test.
 * **Runtime exposure:** `configureApplicationIdentity()` calls `QCoreApplication::setApplicationVersion(PIKATALK_VERSION)` from `main.cpp`. QML reads `Qt.application.version`.
 * **UI location:** Help → About PikaTalk (`Kirigami.AboutPage` in `src/AboutPikaTalk.qml`). Window title is unchanged.

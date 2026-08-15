@@ -74,7 +74,7 @@ Phase 5 acceptance criteria from `PHASES.md`:
 
 ## Known Limitations
 
-* v1 is documented only for Linux / openSUSE Tumbleweed / KDE Plasma 6.
+* 0.1.0 is documented only for Linux / openSUSE Tumbleweed / KDE Plasma 6.
 * Requires a local PicoClaw gateway and launcher; PikaTalk does not install or upgrade PicoClaw.
 * Sidebar filter is title/name substring only. There is no full-text message search.
 * No tray icon and no notifications.

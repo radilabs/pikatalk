@@ -4,7 +4,7 @@ PikaTalk is a native KDE Plasma desktop client for a **local PicoClaw (PikaClaw)
 
 **Version:** 0.1.0 (from `project(pikatalk VERSION …)` in `CMakeLists.txt`; also shown in **Help → About PikaTalk**).
 
-## What v1 can do
+## What 0.1.0 can do
 
 * Organize work into **projects** (create, rename, delete) and **chats** (create, rename, archive, delete). Archive exists for chats only.
 * Persist conversation history, drafts, workspace/model defaults, and tool activity in local SQLite
@@ -19,7 +19,7 @@ PikaTalk is a native KDE Plasma desktop client for a **local PicoClaw (PikaClaw)
 
 PikaTalk is not a general AI frontend, a PicoClaw installer, or a remote-gateway admin tool.
 
-v1 does **not** include:
+0.1.0 does **not** include:
 
 * system tray integration
 * desktop notifications
@@ -29,13 +29,13 @@ v1 does **not** include:
 
 ## Supported platform
 
-v1 is built and documented for:
+0.1.0 is built and documented for:
 
 * Linux
 * openSUSE Tumbleweed
 * KDE Plasma 6
 
-Other distributions and operating systems are not a supported v1 target.
+Other distributions and operating systems are not a supported 0.1.0 target.
 
 ## PicoClaw requirement
 
@@ -147,7 +147,7 @@ PikaTalk uses XDG paths (organization `Radilabs`, application `PikaTalk`). It do
 * No tray icon and no notifications.
 * PicoClaw’s own session logs are not PikaTalk history; PikaTalk stores conversations locally.
 * Gateway Start/Stop/Restart need `picoclaw-launcher` on **18800** and the dashboard password; they do not use systemd.
-* There is no packaged distro update channel in v1.
+* There is no packaged distro update channel in 0.1.0.
 
 ## Developer documentation
 
