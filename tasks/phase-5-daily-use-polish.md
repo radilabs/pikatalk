@@ -403,16 +403,71 @@ Verify:
 
 ## Completion Evidence
 
-Record:
+### States changed
 
-* states changed
-* text/actions used
-* before/after rough edges addressed
-* layout sanity result
+* **Empty projects list:** `Kirigami.PlaceholderMessage` overlay on `projectList` (`emptyProjectsPlaceholder`).
+* **Empty chats list:** overlay on `chatList` (`emptyChatsPlaceholder`).
+* **Empty conversation:** overlay on `conversationArea` (`emptyMessagesPlaceholder`); hidden while `app.isGenerating` so it does not fight the generating label.
+* **Title-filter miss:** distinct “No matching …” copy when the unfiltered list is non-empty.
+* **Request error:** still `Error: %1`, but `%1` is `errorCopy.sanitize(app.requestError)` (display-only; `AppController::requestError` unchanged).
+* **Gateway toolbar error / gateway action line:** same sanitizer. Connecting / reconnecting / stopped / connected labels were already clear and were left as-is.
+* **Generation:** existing `Generating…` (or streaming text) labeled `generationStatusLabel`. Existing Stop and Retry / Regenerate buttons unchanged.
+
+### Text / actions used
+
+| State | Title | Explanation (points at existing UI) |
+|---|---|---|
+| No projects | No projects | Create a project (sidebar **New**) |
+| Filter misses projects | No matching projects | (filter field) |
+| No chats, no project | No chats | Create a project |
+| No chats, project selected | No chats | Create a chat (sidebar **New**, Ctrl+N) |
+| Filter misses chats | No matching chats | (filter field) |
+| No messages, chat selected | No messages | Send a message |
+| No messages, no chat | No messages | Create a chat / Create a project |
+| Gateway connecting | Gateway: Connecting | existing toolbar |
+| Gateway reconnecting | Gateway: Reconnecting… | existing toolbar |
+| Gateway stopped | Gateway: Stopped | existing **Start gateway** |
+| Gateway error | Gateway: Error — \<sanitized\> | existing Start/Restart |
+| Request failure | Error: \<sanitized\> | existing **Retry / Regenerate** |
+| Generating | Generating… | existing **Stop** / Escape |
+
+Sanitizer maps JSON dumps → `Request failed`; `QAbstractSocket` / `WebSocket` noise → `Connection failed`; known `gateway unavailable` / `connection lost` / `gateway error` → short human copy; long dumps truncated to 120 characters with collapsed whitespace.
+
+### Before / after rough edges
+
+* Before: empty ListViews were blank; user had no in-list hint that **New** / composer was the next step.
+* After: placeholders name the empty state and the existing next action.
+* Before: `Error: %1` could show raw JSON or Qt socket enums.
+* After: protocol noise is replaced or truncated at display time.
+* Gateway connecting/stopped copy was already in `gatewayPlaceholder`; not redesigned.
+
+### Layout sanity
+
+* Window still `960x640`, min `640x480`. SplitView / input pane / toolbar layout unchanged.
+* Placeholder icons disabled (`icon.name: ""`) so the short project ListView (~8 grid units) and min-width sidebar (~12 grid units) do not overflow.
+* Placeholder width is `parent.width - 2 * largeSpacing` with wrapping.
+* Offscreen smoke load (`QT_QPA_PLATFORM=offscreen timeout 4 ./build/bin/pikatalk`) started without QML errors (exit 124 = timeout). Interactive 640×480 click-through was not run in this session.
+
+### Actual tests
+
+TDD: `errorcopy_test` failed on JSON/protocol/truncation while `sanitizeUserFacingError` only trimmed. `uistates_test` failed on missing placeholder `objectName`s before QML overlays existed.
+
+```text
+./build/bin/errorcopy_test
+Totals: 8 passed, 0 failed
+
+./build/bin/uistates_test
+Totals: 8 passed, 0 failed
+
+cmake --build build && ctest --test-dir build --output-on-failure
+100% tests passed, 11 tests passed
+```
+
+Did not implement P5-T5+, tray, notifications, or full-text search. Did not refactor `AppController`.
 
 ## Status
 
-* [ ] Complete
+* [x] Complete
 
 ---
 

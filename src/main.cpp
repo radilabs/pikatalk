@@ -2,6 +2,7 @@
 #include "applicationidentity.h"
 #include "applicationpaths.h"
 #include "database.h"
+#include "errorcopy.h"
 #include "titlefilter.h"
 
 #include <QApplication>
@@ -71,6 +72,7 @@ int main(int argc, char *argv[])
     KLocalization::setupLocalizedContext(&engine);
     engine.rootContext()->setContextProperty(QStringLiteral("app"), controller);
     engine.rootContext()->setContextProperty(QStringLiteral("titleMatch"), new TitleMatch(&app));
+    engine.rootContext()->setContextProperty(QStringLiteral("errorCopy"), new ErrorCopy(&app));
     engine.loadFromModule("org.radilabs.pikatalk", "Main");
 
     if (engine.rootObjects().isEmpty()) {

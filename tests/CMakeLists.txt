@@ -95,6 +95,39 @@ target_compile_definitions(shortcuts_test
 
 add_test(NAME shortcuts_test COMMAND shortcuts_test)
 
+add_executable(errorcopy_test
+    errorcopy_test.cpp
+    ${CMAKE_SOURCE_DIR}/src/errorcopy.cpp
+    ${CMAKE_SOURCE_DIR}/src/errorcopy.h
+)
+
+target_include_directories(errorcopy_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+target_link_libraries(errorcopy_test
+    PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+add_test(NAME errorcopy_test COMMAND errorcopy_test)
+
+add_executable(uistates_test
+    uistates_test.cpp
+)
+
+target_link_libraries(uistates_test
+    PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+target_compile_definitions(uistates_test
+    PRIVATE
+    PIKATALK_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+)
+
+add_test(NAME uistates_test COMMAND uistates_test)
+
 add_executable(database_test
     database_test.cpp
     ${CMAKE_SOURCE_DIR}/src/database.cpp

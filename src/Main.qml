@@ -111,7 +111,7 @@ Kirigami.ApplicationWindow {
                             if (app.gatewayState === "connecting")
                                 return i18n("Gateway: Connecting");
                             if (app.gatewayState === "error" || app.lifecycleError.length > 0)
-                                return i18n("Gateway: Error — %1", app.lifecycleError.length > 0 ? app.lifecycleError : app.gatewayError);
+                                return i18n("Gateway: Error — %1", errorCopy.sanitize(app.lifecycleError.length > 0 ? app.lifecycleError : app.gatewayError));
                             return i18n("Gateway: Disconnected");
                         }
                     }
@@ -223,7 +223,7 @@ Kirigami.ApplicationWindow {
                     visible: app.workspaceActionError.length > 0 || app.lifecycleError.length > 0
                     text: {
                         if (app.lifecycleError.length > 0)
-                            return i18n("Gateway action: %1", app.lifecycleError);
+                            return i18n("Gateway action: %1", errorCopy.sanitize(app.lifecycleError));
                         return i18n("Workspace action: %1", app.workspaceActionError);
                     }
                 }
@@ -349,6 +349,19 @@ Kirigami.ApplicationWindow {
                         Layout.preferredHeight: Kirigami.Units.gridUnit * 8
                         clip: true
                         model: sidebarColumn.filteredProjects
+                        Kirigami.PlaceholderMessage {
+                            objectName: "emptyProjectsPlaceholder"
+                            anchors.centerIn: parent
+                            width: parent.width - Kirigami.Units.largeSpacing * 2
+                            visible: projectList.count === 0
+                            icon.name: ""
+                            text: titleFilterField.text.trim().length > 0 && app.projects.length > 0
+                                  ? i18n("No matching projects")
+                                  : i18n("No projects")
+                            explanation: titleFilterField.text.trim().length > 0 && app.projects.length > 0
+                                         ? ""
+                                         : i18n("Create a project")
+                        }
                         currentIndex: {
                             for (let i = 0; i < sidebarColumn.filteredProjects.length; ++i) {
                                 if (sidebarColumn.filteredProjects[i].id === app.currentProjectId) {
@@ -421,6 +434,23 @@ Kirigami.ApplicationWindow {
                         Layout.fillHeight: true
                         clip: true
                         model: sidebarColumn.filteredChats
+                        Kirigami.PlaceholderMessage {
+                            objectName: "emptyChatsPlaceholder"
+                            anchors.centerIn: parent
+                            width: parent.width - Kirigami.Units.largeSpacing * 2
+                            visible: chatList.count === 0
+                            icon.name: ""
+                            text: titleFilterField.text.trim().length > 0 && app.chats.length > 0
+                                  ? i18n("No matching chats")
+                                  : i18n("No chats")
+                            explanation: {
+                                if (titleFilterField.text.trim().length > 0 && app.chats.length > 0)
+                                    return "";
+                                if (app.currentProjectId > 0)
+                                    return i18n("Create a chat");
+                                return i18n("Create a project");
+                            }
+                        }
                         currentIndex: {
                             for (let i = 0; i < sidebarColumn.filteredChats.length; ++i) {
                                 if (sidebarColumn.filteredChats[i].id === app.currentChatId) {
@@ -505,6 +535,21 @@ Kirigami.ApplicationWindow {
                     Layout.fillHeight: true
                     clip: true
                     spacing: Kirigami.Units.largeSpacing
+                    Kirigami.PlaceholderMessage {
+                        objectName: "emptyMessagesPlaceholder"
+                        anchors.centerIn: parent
+                        width: parent.width - Kirigami.Units.largeSpacing * 2
+                        visible: conversationArea.count === 0 && !app.isGenerating
+                        icon.name: ""
+                        text: i18n("No messages")
+                        explanation: {
+                            if (app.currentChatId > 0)
+                                return i18n("Send a message");
+                            if (app.currentProjectId > 0)
+                                return i18n("Create a chat");
+                            return i18n("Create a project");
+                        }
+                    }
                     model: {
                         const messages = app.messages;
                         const tools = app.toolActivities;
@@ -681,6 +726,7 @@ Kirigami.ApplicationWindow {
                 }
 
                 Controls.Label {
+                    objectName: "generationStatusLabel"
                     Layout.fillWidth: true
                     Layout.leftMargin: Kirigami.Units.largeSpacing
                     Layout.rightMargin: Kirigami.Units.largeSpacing
@@ -740,10 +786,11 @@ Kirigami.ApplicationWindow {
                                 onClicked: app.retryOrRegenerate()
                             }
                             Controls.Label {
+                                objectName: "requestErrorLabel"
                                 Layout.fillWidth: true
                                 wrapMode: Text.Wrap
                                 visible: app.requestError.length > 0
-                                text: i18n("Error: %1", app.requestError)
+                                text: i18n("Error: %1", errorCopy.sanitize(app.requestError))
                             }
                         }
                     }
