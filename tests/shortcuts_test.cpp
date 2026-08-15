@@ -39,6 +39,7 @@ void ShortcutsTest::ctrlNCreatesChatWhenProjectIsSelected()
     const QString block = shortcutBlock(qml, QStringLiteral("newChatShortcut"));
     QVERIFY2(!block.isEmpty(), "Main.qml must declare Shortcut objectName newChatShortcut");
     QVERIFY(block.contains(QStringLiteral("StandardKey.New")));
+    QVERIFY(block.contains(QStringLiteral("autoRepeat: false")));
     QVERIFY(block.contains(QStringLiteral("app.currentProjectId > 0")));
     QVERIFY(block.contains(QStringLiteral("app.createChat")));
 }
@@ -68,6 +69,7 @@ void ShortcutsTest::escapeStopsGenerationOnlyWhileActive()
     const QString block = shortcutBlock(qml, QStringLiteral("stopGenerationShortcut"));
     QVERIFY2(!block.isEmpty(), "Main.qml must declare Shortcut objectName stopGenerationShortcut");
     QVERIFY(block.contains(QStringLiteral("\"Escape\"")) || block.contains(QStringLiteral("StandardKey.Cancel")));
+    QVERIFY(block.contains(QStringLiteral("autoRepeat: false")));
     QVERIFY(block.contains(QStringLiteral("enabled: app.isGenerating")));
     QVERIFY(block.contains(QStringLiteral("app.stopGeneration()")));
 }

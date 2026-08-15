@@ -15,6 +15,7 @@ Kirigami.ApplicationWindow {
     Shortcut {
         objectName: "newChatShortcut"
         sequences: [StandardKey.New]
+        autoRepeat: false
         enabled: app.currentProjectId > 0
         onActivated: app.createChat(i18n("New chat"))
     }
@@ -34,6 +35,7 @@ Kirigami.ApplicationWindow {
     Shortcut {
         objectName: "stopGenerationShortcut"
         sequence: "Escape"
+        autoRepeat: false
         enabled: app.isGenerating
         onActivated: app.stopGeneration()
     }
