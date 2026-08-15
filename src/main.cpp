@@ -1,4 +1,5 @@
 #include "appcontroller.h"
+#include "applicationidentity.h"
 #include "applicationpaths.h"
 #include "database.h"
 
@@ -34,9 +35,7 @@ int main(int argc, char *argv[])
     previousMessageHandler = qInstallMessageHandler(pikatalkMessageHandler);
     QApplication app(argc, argv);
     KLocalizedString::setApplicationDomain("pikatalk");
-    QApplication::setOrganizationName(QStringLiteral("Radilabs"));
-    QApplication::setOrganizationDomain(QStringLiteral("radilabs.org"));
-    QApplication::setApplicationName(QStringLiteral("PikaTalk"));
+    configureApplicationIdentity();
     QApplication::setDesktopFileName(QStringLiteral("org.radilabs.pikatalk"));
 
     const ApplicationPaths paths = resolveApplicationPaths();

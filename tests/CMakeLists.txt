@@ -21,6 +21,27 @@ target_compile_definitions(applicationpaths_test
 
 add_test(NAME applicationpaths_test COMMAND applicationpaths_test)
 
+add_executable(applicationversion_test
+    applicationversion_test.cpp
+    ${CMAKE_SOURCE_DIR}/src/applicationidentity.cpp
+    ${CMAKE_SOURCE_DIR}/src/applicationidentity.h
+)
+
+target_include_directories(applicationversion_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+target_link_libraries(applicationversion_test
+    PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+target_compile_definitions(applicationversion_test
+    PRIVATE
+    PIKATALK_VERSION="${PROJECT_VERSION}"
+)
+
+add_test(NAME applicationversion_test COMMAND applicationversion_test)
+
 add_executable(database_test
     database_test.cpp
     ${CMAKE_SOURCE_DIR}/src/database.cpp

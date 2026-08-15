@@ -8,6 +8,8 @@ ecm_add_qml_module(pikatalk
 target_sources(pikatalk
     PRIVATE
     main.cpp
+    applicationidentity.cpp
+    applicationidentity.h
     applicationpaths.cpp
     applicationpaths.h
     database.cpp
@@ -32,6 +34,12 @@ target_sources(pikatalk
 ecm_target_qml_sources(pikatalk
     SOURCES
     Main.qml
+    AboutPikaTalk.qml
+)
+
+target_compile_definitions(pikatalk
+    PRIVATE
+    PIKATALK_VERSION="${PROJECT_VERSION}"
 )
 
 target_link_libraries(pikatalk

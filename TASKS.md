@@ -13,10 +13,11 @@ tasks/
 ├── phase-1-local-chat-state.md
 ├── phase-2-pikaclaw-chat.md
 ├── phase-3-agent-and-workspace-ux.md
-└── phase-4-gateway-management.md
+├── phase-4-gateway-management.md
+└── phase-5-daily-use-polish.md
 ```
 
-`phase-0-native-foundation.md`, `phase-1-local-chat-state.md`, `phase-2-pikaclaw-chat.md`, and `phase-3-agent-and-workspace-ux.md` are historical execution evidence. Do not reopen Phase 0–3 work.
+`phase-0-native-foundation.md`, `phase-1-local-chat-state.md`, `phase-2-pikaclaw-chat.md`, `phase-3-agent-and-workspace-ux.md`, and `phase-4-gateway-management.md` are historical execution evidence. Do not reopen Phase 0–4 work.
 
 Future phase task files are created only after the current phase handoff is accepted.
 

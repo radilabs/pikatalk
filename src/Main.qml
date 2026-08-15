@@ -12,6 +12,23 @@ Kirigami.ApplicationWindow {
     minimumHeight: 480
     title: i18nc("@title:window", "PikaTalk")
 
+    menuBar: Controls.MenuBar {
+        Controls.Menu {
+            title: i18nc("@title:menu", "Help")
+            Controls.MenuItem {
+                objectName: "aboutPikaTalkAction"
+                text: i18nc("@action:inmenu", "About PikaTalk")
+                icon.name: "help-about"
+                onTriggered: root.pageStack.layers.push(aboutPage)
+            }
+        }
+    }
+
+    Component {
+        id: aboutPage
+        AboutPikaTalk {}
+    }
+
     pageStack.initialPage: Kirigami.Page {
         id: mainPage
         title: i18n("PikaTalk")
