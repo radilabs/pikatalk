@@ -1,4 +1,4 @@
-# PikaClaw chat API (Phase 2–3)
+# PikaClaw chat API
 
 This document records the **observed** local chat API PikaTalk uses. It is not a general PicoClaw manual.
 
@@ -21,7 +21,7 @@ Do not put tokens, API keys, or `.security.yml` contents in this repository.
 | Default model | `step-3.7-flash` (`picoclaw model`) |
 | Default workspace | `~/.picoclaw/workspace` |
 
-A separate launcher listens on `127.0.0.1:18800`. That process is **not** the chat gateway. Phase 4 uses it for gateway start/stop/restart (see **Gateway lifecycle** below).
+A separate launcher listens on `127.0.0.1:18800`. That process is **not** the chat gateway. PikaTalk uses it for gateway start/stop/restart (see **Gateway lifecycle** below).
 
 ## Reachability
 
@@ -240,7 +240,7 @@ Server error shape:
 * Treating PicoClaw session JSONL as PikaTalk conversation history
 * Launcher routes unrelated to gateway lifecycle (config editor, logs viewer, models catalog UI, etc.)
 
-## Gateway lifecycle (Phase 4)
+## Gateway lifecycle
 
 Observed on PicoClaw 0.3.1 with `picoclaw-launcher` on `127.0.0.1:18800` and chat gateway on `127.0.0.1:18790`.
 
@@ -349,7 +349,7 @@ See `decisions/0005-picoclaw-launcher-lifecycle.md`.
 
 ### Developer warning: temporary launchers
 
-Live Phase 4 discovery/tests must not leave a disposable `picoclaw-launcher` on `127.0.0.1:18800`. That process owns the dashboard auth DB for its `HOME`. A leftover temp launcher makes the user’s normal password fail and blocks the desktop menu from starting another instance. Prefer the user’s running launcher, or stop the regular one only for the duration of a temp probe and restore it afterward. See `docs/development.md` (Live PicoClaw launcher hygiene).
+Live discovery/tests must not leave a disposable `picoclaw-launcher` on `127.0.0.1:18800`. That process owns the dashboard auth DB for its `HOME`. A leftover temp launcher makes the user’s normal password fail and blocks the desktop menu from starting another instance. Prefer the user’s running launcher, or stop the regular one only for the duration of a temp probe and restore it afterward. See `docs/development.md` (Live PicoClaw launcher hygiene).
 
 ## Tool activity (Phase 3)
 

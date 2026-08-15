@@ -2,7 +2,9 @@
 
 Target environment: openSUSE Tumbleweed + KDE Plasma 6.
 
-PikaTalk is a Qt 6 / Kirigami desktop application. This document is the local build, run, and debug cycle.
+PikaTalk is a Qt 6 / Kirigami desktop application. This document is the local build, run, and debug cycle. First-time **user** install and v1 capabilities live in the repository `README.md`.
+
+Application version is **1.0.0**, defined only in the root `CMakeLists.txt` (`project(pikatalk VERSION 1.0.0 …)`). Runtime uses `QCoreApplication::applicationVersion()` / **Help → About PikaTalk**.
 
 ## 1. Install development dependencies
 
@@ -139,7 +141,13 @@ Useful environment variables:
 
 Local data locations are documented in `docs/local-storage.md`.
 
-The PikaClaw/PicoClaw chat and tool protocol used by Phase 2–3 is documented in `docs/pikaclaw-api.md`. Gateway connection settings live in `$XDG_CONFIG_HOME/Radilabs/PikaTalk/pikatalk.conf`:
+v1 daily-use notes for developers:
+
+* Sidebar title filter is in-memory substring match on project `name` and chat `title` only (no message-body search, no FTS).
+* Window shortcuts: Ctrl+N new chat (current project required), Ctrl+F focus title filter, Ctrl+L focus composer, Escape stops generation only while generating.
+* v1 has no tray integration and no notifications.
+
+The PikaClaw/PicoClaw chat, tool, and launcher protocol is documented in `docs/pikaclaw-api.md`. Gateway connection settings live in `$XDG_CONFIG_HOME/Radilabs/PikaTalk/pikatalk.conf`:
 
 ```ini
 [picoClaw]
@@ -152,7 +160,7 @@ launcherPassword=
 
 Leave `token` empty to read the same-user PicoClaw pico channel token from `~/.picoclaw/.security.yml`. Do not commit that file or the token.
 
-`launcherPassword` is required for Start/Stop/Restart (Phase 4). You may also set `PIKATALK_LAUNCHER_PASSWORD` in the environment for tests. Do not commit the password.
+`launcherPassword` is required for Start/Stop/Restart. You may also set `PIKATALK_LAUNCHER_PASSWORD` in the environment for tests. Do not commit the password.
 
 ### Live PicoClaw launcher hygiene
 
@@ -173,7 +181,7 @@ pkill -f 'picoclaw-launcher'   # only if you intend to replace it
 picoclaw-launcher -no-browser &
 ```
 
-Optional desktop launcher overrides (Phase 3):
+Optional desktop launcher overrides:
 
 ```ini
 [desktop]

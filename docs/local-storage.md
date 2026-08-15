@@ -56,7 +56,7 @@ PikaTalk cache directory: ...
 PikaTalk sqlite database: ...
 ```
 
-## Phase 1 database
+## Database
 
 The production database is:
 
@@ -136,7 +136,7 @@ New chats are created with NULL overrides, so they inherit. Changing a project d
 
 Deleting a project cascades to its chats, messages, drafts, and tool activities.
 
-## Phase 2 gateway configuration
+## Gateway configuration
 
 Conversation history stays in `pikatalk.sqlite`. PikaClaw connection settings are **not** stored in SQLite.
 
@@ -147,12 +147,12 @@ Keys under `[picoClaw]`:
 * `endpoint` — default `ws://127.0.0.1:18790/pico/ws`
 * `token` — Pico channel bearer token. If empty, PikaTalk reads `~/.picoclaw/.security.yml`
 * `configPath` — PicoClaw `config.json` used for `model_list` discovery
-* `launcherUrl` — default `http://127.0.0.1:18800` (Phase 4 lifecycle)
-* `launcherPassword` — PicoClaw launcher dashboard password (Phase 4). Never commit. Env fallback: `PIKATALK_LAUNCHER_PASSWORD`
+* `launcherUrl` — default `http://127.0.0.1:18800` (gateway start/stop/restart)
+* `launcherPassword` — PicoClaw launcher dashboard password. Never commit. Env fallback: `PIKATALK_LAUNCHER_PASSWORD`
 
 See `docs/pikaclaw-api.md` and `decisions/0003-pico-protocol-chat-transport.md`.
 
-## Phase 3 desktop actions
+## Desktop actions
 
 Open-folder / open-terminal / open-editor use the effective active workspace from inheritance above. They do not write workspace paths into PicoClaw config. Optional launcher overrides live in the same QSettings org as other app prefs:
 

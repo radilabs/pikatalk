@@ -724,16 +724,29 @@ Remove stale Phase 0–4 language that incorrectly describes current behavior.
 
 ## Completion Evidence
 
-Record:
+Recorded 2026-08-15.
 
-* README sections updated
-* docs updated
-* commands verified
-* stale information removed
+* **README sections updated:** rewrite of `README.md` for a first-time openSUSE/Plasma user: what PikaTalk is, v1 capabilities, what it is not (explicitly no tray / notifications / full-text search), supported platform, PicoClaw requirement (ports **18790** chat / **18800** launcher), build dependencies, build, local install (`cmake --install` to `$HOME/.local`), first run, XDG data/config/cache, version **1.0.0**, known limitations. Developer/architecture history and ADRs moved to links under `docs/` / `decisions/` / `docs/handoffs/`.
+* **docs updated:**
+  * `docs/development.md` — version source of truth, v1 filter/shortcuts/no-tray notes, user README pointer; **launcher hygiene on 18800 kept here**; dropped “Phase 2–3/4” wording on current settings.
+  * `docs/local-storage.md` — section titles no longer freeze the product at Phase 1/2/3; launcher keys described as current behavior.
+  * `docs/pikaclaw-api.md` — title and lifecycle section describe current gateway/launcher split; temp-launcher warning retained.
+* **Commands verified against the repo:**
+  * `project(pikatalk VERSION 1.0.0)` in root `CMakeLists.txt`; About uses `Qt.application.version`.
+  * Executable target/binary `pikatalk` (`src/CMakeLists.txt` `add_executable` / `install(TARGETS)`; `./build/bin/pikatalk` exists).
+  * `cmake -B build -G Ninja --install-prefix "$HOME/.local"` is valid CMake 4.4.2 (`--install-prefix` → `CMAKE_INSTALL_PREFIX`).
+  * Install artifacts match T6: `$HOME/.local/bin/pikatalk`, `…/applications/org.radilabs.pikatalk.desktop`, `…/metainfo/org.radilabs.pikatalk.metainfo.xml`, `…/icons/hicolor/scalable/apps/org.radilabs.pikatalk.svg`.
+  * Defaults in code: `ws://127.0.0.1:18790/pico/ws`, `http://127.0.0.1:18800`, `~/.picoclaw/config.json`, `pikatalk.conf` under AppConfigLocation.
+  * XDG: org `Radilabs` / app `PikaTalk` → `~/.local/share|~/.config|~/.cache/Radilabs/PikaTalk`.
+  * Shortcuts and Help → About match `Main.qml` / `AboutPikaTalk.qml`.
+  * zypper package list matches `docs/development.md` plus T6’s validated devel stack; `qt6-network-devel` listed because CMake `find_package(Qt6 … Network)`.
+* **Stale information removed:** README no longer claims “currently Phase 4”; user-facing docs no longer present Phase 0–4 as the live product status. Historical handoffs under `docs/handoffs/` left as completion records.
+
+Did not implement P5-T8+, tray, notifications, or full-text search.
 
 ## Status
 
-* [ ] Complete
+* [x] Complete
 
 ---
 
