@@ -78,6 +78,23 @@ target_link_libraries(titlefilter_test
 
 add_test(NAME titlefilter_test COMMAND titlefilter_test)
 
+add_executable(shortcuts_test
+    shortcuts_test.cpp
+)
+
+target_link_libraries(shortcuts_test
+    PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+target_compile_definitions(shortcuts_test
+    PRIVATE
+    PIKATALK_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+)
+
+add_test(NAME shortcuts_test COMMAND shortcuts_test)
+
 add_executable(database_test
     database_test.cpp
     ${CMAKE_SOURCE_DIR}/src/database.cpp

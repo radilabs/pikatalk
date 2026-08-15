@@ -12,6 +12,32 @@ Kirigami.ApplicationWindow {
     minimumHeight: 480
     title: i18nc("@title:window", "PikaTalk")
 
+    Shortcut {
+        objectName: "newChatShortcut"
+        sequences: [StandardKey.New]
+        enabled: app.currentProjectId > 0
+        onActivated: app.createChat(i18n("New chat"))
+    }
+    Shortcut {
+        objectName: "titleFilterShortcut"
+        sequences: [StandardKey.Find]
+        onActivated: {
+            titleFilterField.forceActiveFocus();
+            titleFilterField.selectAll();
+        }
+    }
+    Shortcut {
+        objectName: "messageInputShortcut"
+        sequence: "Ctrl+L"
+        onActivated: messageInput.forceActiveFocus()
+    }
+    Shortcut {
+        objectName: "stopGenerationShortcut"
+        sequence: "Escape"
+        enabled: app.isGenerating
+        onActivated: app.stopGeneration()
+    }
+
     menuBar: Controls.MenuBar {
         Controls.Menu {
             title: i18nc("@title:menu", "Help")

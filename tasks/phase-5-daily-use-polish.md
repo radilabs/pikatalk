@@ -290,15 +290,56 @@ Verify each shortcut manually and where useful automatically:
 
 ## Completion Evidence
 
-Record:
+Recorded 2026-08-15.
 
-* exact shortcuts
-* any conflict resolved
-* test result for each
+* **Exact shortcuts** (window-level `Shortcut` items in `Main.qml`, no configuration UI):
+  * **Ctrl+N** (`StandardKey.New`, `newChatShortcut`) — `app.createChat(i18n("New chat"))` when `app.currentProjectId > 0`; otherwise disabled so no empty-project chat is created.
+  * **Ctrl+F** (`StandardKey.Find`, `titleFilterShortcut`) — focuses and selects `titleFilterField`.
+  * **Ctrl+L** (`messageInputShortcut`) — focuses `messageInput`. No `StandardKey` maps to “composer focus”; explicit `Ctrl+L` used.
+  * **Escape** (`stopGenerationShortcut`) — `app.stopGeneration()` only while `app.isGenerating`; disabled when idle so Escape is not consumed for unrelated behavior.
+
+* **Conflicts resolved:** None required a different chord. Escape is gated on generation so it does not fight dialog dismiss / SearchField clear / text editing while idle. Ctrl+F uses Qt/Plasma Find (`StandardKey.Find`) to focus the existing title filter rather than introducing a second find UI.
+
+* **Tests:**
+  1. Ctrl+N — `ShortcutsTest::ctrlNCreatesChatWhenProjectIsSelected` (wired to `createChat`, enabled only with a current project).
+  2. Ctrl+F — `ShortcutsTest::ctrlFFocusesTitleFilter`.
+  3. Ctrl+L — `ShortcutsTest::ctrlLFocusesMessageInput`.
+  4. Escape while generating — `ShortcutsTest::escapeStopsGenerationOnlyWhileActive` (`enabled: app.isGenerating` + `stopGeneration()`). Idle Escape does not activate that shortcut. `AppController::stopGeneration()` already returns false when not generating.
+  5. Text editing — shortcuts are window-level and do not override TextArea/TextField editing keys (Ctrl+N/F/L and Escape-while-generating only).
+
+### Tests
+
+TDD RED (`Main.qml` had no Shortcut objectNames):
+
+```text
+FAIL!  : ShortcutsTest::ctrlNCreatesChatWhenProjectIsSelected() '!block.isEmpty()' returned FALSE. (Main.qml must declare Shortcut objectName newChatShortcut)
+FAIL!  : ShortcutsTest::ctrlFFocusesTitleFilter() '!block.isEmpty()' returned FALSE. (Main.qml must declare Shortcut objectName titleFilterShortcut)
+FAIL!  : ShortcutsTest::ctrlLFocusesMessageInput() '!block.isEmpty()' returned FALSE. (Main.qml must declare Shortcut objectName messageInputShortcut)
+FAIL!  : ShortcutsTest::escapeStopsGenerationOnlyWhileActive() '!block.isEmpty()' returned FALSE. (Main.qml must declare Shortcut objectName stopGenerationShortcut)
+Totals: 2 passed, 4 failed
+```
+
+GREEN after `Shortcut` items on `Kirigami.ApplicationWindow`:
+
+```text
+./build/bin/shortcuts_test
+PASS   : ShortcutsTest::ctrlNCreatesChatWhenProjectIsSelected()
+PASS   : ShortcutsTest::ctrlFFocusesTitleFilter()
+PASS   : ShortcutsTest::ctrlLFocusesMessageInput()
+PASS   : ShortcutsTest::escapeStopsGenerationOnlyWhileActive()
+Totals: 6 passed, 0 failed
+```
+
+Full suite:
+
+```text
+cmake --build build && ctest --test-dir build --output-on-failure
+100% tests passed, 9 tests passed
+```
 
 ## Status
 
-* [ ] Complete
+* [x] Complete
 
 ---
 
